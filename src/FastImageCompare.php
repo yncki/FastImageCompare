@@ -107,7 +107,7 @@ class FastImageCompare
     public function compareArray(array $inputImages)
     {
         $output = [];
-        $normalizedImages = $this->normalize($inputImages);
+        $normalizedImages = $this->normalizeArray($inputImages);
         $normalizedImagesIndexed = array_keys($normalizedImages);
         $imageNameKeys = array_keys($normalizedImagesIndexed);
         //compare each with each
@@ -131,26 +131,33 @@ class FastImageCompare
      * @return string[] normalized images absolute paths
      * @throws Exception
      */
-    protected function normalize(array $images)
+    protected function normalizeArray(array $images)
     {
         $images = array_unique($images);
         $normalized = [];
         foreach ($images as $imagePath) {
-            if (file_exists($imagePath)) {
-                $baseName = basename($imagePath);
-                $baseNameMd5 = md5($baseName);
-                $normalizedKey = '.normalized.' . $this->getSampleSize();
-                $normalizedOutputFileName = $baseNameMd5 . $normalizedKey;
-                if (!file_exists($normalizedOutputFileName)) {
-                    $imageResize = new ImageResize($imagePath);
-                    $imageResize->resize($this->getSampleSize(), $this->getSampleSize(), true);
-                    $imageResize->save($this->getTemporaryDirectory() . $normalizedOutputFileName);
-                    unset($imageResize);
-                }
-                $normalized[$this->getTemporaryDirectory() . $normalizedOutputFileName] = $imagePath;
-            } else {
-                throw new Exception('Image not found :' . $imagePath);
+            $normalized= array_merge($normalized,$this->normalize($imagePath));
+        }
+        return $normalized;
+    }
+
+
+    protected function normalize($imagePath){
+        $normalized = [];
+        if (file_exists($imagePath)) {
+            $baseName = basename($imagePath);
+            $baseNameMd5 = md5($baseName);
+            $normalizedKey = '.normalized.' . $this->getSampleSize();
+            $normalizedOutputFileName = $baseNameMd5 . $normalizedKey;
+            if (!file_exists($normalizedOutputFileName)) {
+                $imageResize = new ImageResize($imagePath);
+                $imageResize->resize($this->getSampleSize(), $this->getSampleSize(), true);
+                $imageResize->save($this->getTemporaryDirectory() . $normalizedOutputFileName);
+                unset($imageResize);
             }
+            $normalized[$this->getTemporaryDirectory() . $normalizedOutputFileName] = $imagePath;
+        } else {
+            throw new Exception('Image not found :' . $imagePath);
         }
         return $normalized;
     }
@@ -171,12 +178,12 @@ class FastImageCompare
         $this->sampleSize = $sampleSize;
     }
 
-    protected function getTemporaryDirectory()
+    public function getTemporaryDirectory()
     {
         return $this->temporaryDirectory;
     }
 
-    protected function setTemporaryDirectory($directory)
+    private function setTemporaryDirectory($directory)
     {
         if (is_null($directory)) {
             $this->temporaryDirectory = sys_get_temp_dir() . DIRECTORY_SEPARATOR . '_fastImageCompare' . DIRECTORY_SEPARATOR;
@@ -191,7 +198,15 @@ class FastImageCompare
         if (!is_writable($this->getTemporaryDirectory())) throw new \Exception('Temporary directory ' . $this->getTemporaryDirectory() . ' is not writable');
     }
 
-    protected function compareImages($imageLeft, $imageRight)
+
+    /**
+     * Internal compare images, this method assumes that images are in equal sizes
+     *
+     * @param $imageLeft
+     * @param $imageRight
+     * @return float
+     */
+    private function compareImages($imageLeft, $imageRight)
     {
         $imageInstanceLeft = new \imagick();
         $imageInstanceRight = new \imagick();
@@ -267,7 +282,7 @@ class FastImageCompare
      * @param float $enoughDifference
      * @return array
      */
-    public function extractDuplicatesMap(array $inputImages, $enoughDifference = 0.05)
+    private function extractDuplicatesMap(array $inputImages, $enoughDifference = 0.05)
     {
         $compared = $this->compareArray($inputImages);
         $output = [];
@@ -288,7 +303,7 @@ class FastImageCompare
      * @param int $matchMode
      * @return int|null|string
      */
-    protected function matchSelect($map, $duplicate, $matchMode = FastImageCompare::PREFER_ANY)
+    private function matchSelect($map, $duplicate, $matchMode = FastImageCompare::PREFER_ANY)
     {
         $mapEntry = $map[$duplicate];
         switch ($matchMode) {
@@ -336,7 +351,7 @@ class FastImageCompare
         }
     }
 
-    public function getImageSizerInstance()
+    private function getImageSizerInstance()
     {
         if (is_null($this->imageSizerInstance)) $this->imageSizerInstance = new FastImageSize();
         return $this->imageSizerInstance;

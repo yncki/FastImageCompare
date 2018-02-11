@@ -1,11 +1,12 @@
 {
-  "name": "pepeEpe/FastImageCompare",
-  "description": "Fast Image Comparer with different aspect ratios and sizes. Can extract duplicates, or generate unique images based on difference percentage. ",
+  "name": "pepeEpe/php-fast-image-compare",
+  "description": "Fast Image Comparer with different aspect ratios and sizes. Can extract duplicates and unique images based on difference percentage. ",
   "keywords":[
     "image",
     "compare",
     "duplicate",
-    "hamming distance"
+    "unique",
+    "php"
   ],
   "minimum-stability": "stable",
   "license": "MIT",
