@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "content-hash": "f7ceaf2843185f97101a9125287ec8ab",
+    "content-hash": "32ca2e85fa819e6417deae1a8947e814",
     "packages": [
         {
             "name": "gumlet/php-image-resize",
@@ -741,7 +741,7 @@
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
-        "php": ">=5.3.0",
+        "php": ">=5.6.0",
         "ext-imagick": "*"
     },
     "platform-dev": []

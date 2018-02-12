@@ -33,11 +33,6 @@ class FastImageCompare
     const PREFER_LARGER_DIFFERENCE = 8;
 
     /**
-     * @var int
-     */
-    protected $fuzzPercentage = 2;
-
-    /**
      * Sample size to normalize before comparing [ width & height ]
      * For most purposes sample size should be 8|16|32
      * For more precise results use > 64 ( slower and more memory hungry )
@@ -47,33 +42,47 @@ class FastImageCompare
     protected $sampleSize;
 
     protected $temporaryDirectory;
-
     protected $temporaryDirectoryPermissions = 0755;
 
     private $imageSizerInstance = null;
 
     /**
+     * @var IImageComparator[]
+     */
+    private $registeredComparators = [];
+
+    /**
      * FastImageCompare constructor.
-     * @param null $temporaryDirectory
+     *
+     *
+     * @param null $absoluteTemporaryDirectory When null, library will use system temporary directory
      * @param int $sampleSize
+     * @param IImageComparator[]|IImageComparator|null $comparators array of comparator instances, when null a default comparator will be registered @see ImageMagickComparator with metric MEAN ABSOLUTE ERROR and fuzz=2
      * @throws \Exception
      */
-    public function __construct($temporaryDirectory = null, $sampleSize = 8)
+    public function __construct($absoluteTemporaryDirectory = null, $sampleSize = 8, $comparators = null)
     {
-        $this->setTemporaryDirectory($temporaryDirectory);
+        $this->setTemporaryDirectory($absoluteTemporaryDirectory);
         $this->setSampleSize($sampleSize);
+        if (is_null($comparators)) {
+            $this->registerComparator(new ImageMagickComparator());
+        } elseif (is_array($comparators)) {
+            $this->setComparators($comparators);
+        } elseif ($comparators instanceof IImageComparator){
+            $this->registerComparator($comparators);
+        }
     }
 
     /**
      * @param array $inputImages
-     * @param float $enough
+     * @param float $enough percentage 0..1
      * @return array
      * @throws \Exception
      */
     public function extractDuplicates(array $inputImages, $enough = 0.05)
     {
         $output = [];
-        $compared = $this->compareArray($inputImages);
+        $compared = $this->compareArray($inputImages,$enough);
         foreach ($compared as $data) {
             if ($data[2] <= $enough) {
                 $output[] = $data[0];
@@ -84,12 +93,12 @@ class FastImageCompare
     }
 
     /**
-     * Compares each with each and return difference percentage in range 0..1
+     * Compares each with each using registered comparators and return difference percentage in range 0..1
      * @param array $inputImages
      * @return array
      * @throws \Exception
      */
-    public function compareArray(array $inputImages)
+    public function compareArray(array $inputImages,$enoughDifference)
     {
         $output = [];
         $normalizedImages = $this->normalizeArray($inputImages);
@@ -100,9 +109,8 @@ class FastImageCompare
             for ($y = $x + 1; $y < count($normalizedImagesIndexed); $y++) {
                 $imageLeft = $normalizedImagesIndexed[$imageNameKeys[$x]];
                 $imageRight = $normalizedImagesIndexed[$imageNameKeys[$y]];
-                $compareResult = $this->compareImages($imageLeft, $imageRight);
+                $compareResult = $this->internalCompare($imageLeft, $imageRight,$enoughDifference);
                 $output[] = [$normalizedImages[$imageLeft], $normalizedImages[$imageRight], $compareResult];
-
             }
         }
         return $output;
@@ -110,8 +118,8 @@ class FastImageCompare
 
     /**
      * Creates normalized [aspectRatio & pixelCount ] version of images from array $images
-     * Common resolution is used for all input sampleSize x sampleSize @see FastImageCompare::setSampleSize()
      *
+     * Common resolution is used for all input sampleSize x sampleSize @see FastImageCompare::setSampleSize()
      * @param array $images
      * @return string[] normalized images absolute paths
      * @throws \Exception
@@ -121,7 +129,7 @@ class FastImageCompare
         $images = array_unique($images);
         $normalized = [];
         foreach ($images as $imagePath) {
-            $normalized= array_merge($normalized,$this->normalize($imagePath));
+            $normalized = array_merge($normalized,$this->normalize($imagePath));
         }
         return $normalized;
     }
@@ -137,9 +145,9 @@ class FastImageCompare
         if (file_exists($imagePath)) {
             $baseName = basename($imagePath);
             $baseNameMd5 = md5($baseName);
-            $normalizedKey = '.normalized.' . $this->getSampleSize();
+            $normalizedKey = '.n.' . $this->getSampleSize();
             $normalizedOutputFileName = $baseNameMd5 . $normalizedKey;
-            if (!file_exists($normalizedOutputFileName)) {
+            if (!file_exists($this->getTemporaryDirectory().$normalizedOutputFileName)) {
                 $imageResize = new ImageResize($imagePath);
                 $imageResize->quality_jpg = 100;
                 $imageResize->quality_png = 9;
@@ -159,42 +167,29 @@ class FastImageCompare
     /**
      * Internal method to compare images, this method assumes that images are in equal sizes
      *
-     * @param $imageLeft
-     * @param $imageRight
-     * @return float
+     * @param $imageLeft string
+     * @param $imageRight string
+     * @param float $enoughDifference
+     * @return float[]
      * @throws \Exception
      */
-    private function compareImages($imageLeft, $imageRight)
+    private function internalCompare($imageLeft, $imageRight, $enoughDifference)
     {
-        $imageInstanceLeft = new \imagick();
-        $imageInstanceRight = new \imagick();
-        $imageInstanceLeft->SetOption('fuzz', $this->getFuzzPercentage() . '%');
-
-        $imageInstanceLeft->readImage($imageLeft);
-        $imageInstanceRight->readImage($imageRight);
-
-//        $imageInstanceLeft->setColorspace($this->compareColorSpace);
-//        $imageInstanceRight->setColorspace($this->compareColorSpace);
-        //  $imageInstanceLeft->normalizeImage(\Imagick::CHANNEL_GRAY);
-        //  $imageInstanceRight->normalizeImage(\Imagick::CHANNEL_GRAY);
-
-        // compare the images using METRIC=1 (Absolute Error)//Imagick::METRIC_MEANABSOLUTEERROR
-        $compareResult = $imageInstanceLeft->compareImages($imageInstanceRight, \Imagick::METRIC_MEANABSOLUTEERROR)[1];
-        $imageInstanceLeft->clear();
-        $imageInstanceRight->clear();
-        unset($imageInstanceLeft);
-        unset($imageInstanceRight);
-        return $compareResult;
+        $results = [];
+        foreach ($this->registeredComparators as $comparatorIndex => $comparatorInstance){
+            $results = $comparatorInstance->calculateDifference($imageLeft,$imageRight,$enoughDifference);    //TODO
+        }
+        return $results;
     }
 
     /**
      * @param array $images
      * @param float $enoughDifference
-     * @param int $matchMode
+     * @param int $preferOnDuplicate
      * @return array
      * @throws \Exception
      */
-    public function extractUniques(array $images, $enoughDifference = 0.05, $matchMode = FastImageCompare::PREFER_LARGER_IMAGE)
+    public function extractUniques(array $images, $enoughDifference = 0.05, $preferOnDuplicate = FastImageCompare::PREFER_LARGER_IMAGE)
     {
         //TODO $matchMode bit flags
 //        if ($matchMode & PREFER_LARGER_IMAGE) {
@@ -215,7 +210,7 @@ class FastImageCompare
                 $keys = array_keys($dupFromMap);
                 $diff = array_intersect($keys, $picked);
                 if (count($diff) == 0) {
-                    $picked[] = $this->matchSelect($duplicatesMap, $duplicate, $matchMode);
+                    $picked[] = $this->preferedPick($duplicatesMap, $duplicate, $preferOnDuplicate);
                 }
             }
         }
@@ -231,9 +226,9 @@ class FastImageCompare
      * @return array
      * @throws \Exception
      */
-    private function extractDuplicatesMap(array $inputImages, $enoughDifference = 0.05)
+    public function extractDuplicatesMap(array $inputImages, $enoughDifference = 0.05)
     {
-        $compared = $this->compareArray($inputImages);
+        $compared = $this->compareArray($inputImages,$enoughDifference);
         $output = [];
         foreach ($compared as $data) {
             if ($data[2] <= $enoughDifference) {
@@ -249,13 +244,13 @@ class FastImageCompare
     /**
      * @param $duplicateMap
      * @param $duplicateItem
-     * @param int $matchMode
+     * @param int $preferOnDuplicate
      * @return int|null|string
      */
-    private function matchSelect($duplicateMap, $duplicateItem, $matchMode = FastImageCompare::PREFER_LARGER_IMAGE)
+    private function preferedPick($duplicateMap, $duplicateItem, $preferOnDuplicate = FastImageCompare::PREFER_LARGER_IMAGE)
     {
         $mapEntry = $duplicateMap[$duplicateItem];
-        switch ($matchMode) {
+        switch ($preferOnDuplicate) {
             case self::PREFER_LARGER_DIFFERENCE:
                 //add $duplicate to $mapEntry with maximum difference in $mapEntry
                 $maxDiff = 0;
@@ -269,7 +264,7 @@ class FastImageCompare
                 return key($sorted);
                 break;
             case self::PREFER_LOWER_DIFFERENCE:
-                $maxDiff = 0;
+                $maxDiff = PHP_INT_MAX;
                 foreach ($mapEntry as $entry => $differenceValue)
                     if ($entry === $duplicateItem)
                         $maxDiff = min($maxDiff, $differenceValue);
@@ -314,22 +309,6 @@ class FastImageCompare
      * SETTERS & GETTERS
      */
 
-
-    /**
-     * @return int
-     */
-    public function getFuzzPercentage()
-    {
-        return $this->fuzzPercentage;
-    }
-
-    /**
-     * @param int $fuzzPercentage
-     */
-    public function setFuzzPercentage($fuzzPercentage)
-    {
-        $this->fuzzPercentage = $fuzzPercentage;
-    }
 
     /**
      * @return int
@@ -400,6 +379,36 @@ class FastImageCompare
 
 
     /**
+     * Register new comparator
+     * @param IImageComparator $comparatorInstance
+     */
+    public function registerComparator(IImageComparator $comparatorInstance){
+        $this->registeredComparators[] = $comparatorInstance;
+    }
+
+    /**
+     * @param IImageComparator[] $comparators
+     */
+    public function setComparators(array $comparators){
+        $this->registeredComparators = $comparators;
+    }
+
+    /**
+     * @return IImageComparator[]
+     */
+    public function getComparators(){
+        return $this->registeredComparators;
+    }
+
+    /**
+     * Clear comparators
+     */
+    public function clearComparators(){
+        $this->setComparators([]);
+    }
+
+
+    /**
      * UTILS
      */
 
@@ -453,9 +462,9 @@ class FastImageCompare
         echo '<hr>';
         foreach ($input as $img) {
             $url = str_replace($root, '', $img);
-            //$b = basename($img);
-            //$url = '/temporary/_importer_api/'.$b;
-            echo '<img style="height:100px;padding:4px;" src="' . $url . '"/>';//<br/>';
+           // $b = basename($img);
+           // $url = '/temporary/_importer_api/'.$b;
+            echo '<img style="height:40px;padding:4px;" src="' . $url . '"/>';//<br/>';
         }
     }
 
