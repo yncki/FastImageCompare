@@ -141,6 +141,10 @@ class FastImageCompare
             $normalizedOutputFileName = $baseNameMd5 . $normalizedKey;
             if (!file_exists($normalizedOutputFileName)) {
                 $imageResize = new ImageResize($imagePath);
+                $imageResize->quality_jpg = 100;
+                $imageResize->quality_png = 9;
+                $imageResize->quality_webp = 100;
+                $imageResize->quality_truecolor = true;
                 $imageResize->resize($this->getSampleSize(), $this->getSampleSize(), true);
                 $imageResize->save($this->getTemporaryDirectory() . $normalizedOutputFileName);
                 unset($imageResize);
@@ -298,10 +302,10 @@ class FastImageCompare
 
 
     /**
-     * Clears files in cache folder older than $lifeTimeSeconds
-     * @param int $lifeTimeSeconds
+     * Clears files in cache folder older than $lifeTimeSeconds,
+     * @param int $lifeTimeSeconds , set < 0 to remove all files
      */
-    public function clearCache($lifeTimeSeconds = 0)
+    public function clearCache($lifeTimeSeconds = -1)
     {
         //TODO
     }
