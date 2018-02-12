@@ -12,6 +12,9 @@ namespace pepeEpe\FastImageCompare;
 
 use Gumlet\ImageResize;
 use FastImageSize\FastImageSize;
+use RecursiveIteratorIterator;
+use RecursiveDirectoryIterator;
+use SplFileInfo;
 
 /**
  * Class FastImageCompare
@@ -49,55 +52,23 @@ class FastImageCompare
 
     private $imageSizerInstance = null;
 
+    /**
+     * FastImageCompare constructor.
+     * @param null $temporaryDirectory
+     * @param int $sampleSize
+     * @throws \Exception
+     */
     public function __construct($temporaryDirectory = null, $sampleSize = 8)
     {
         $this->setTemporaryDirectory($temporaryDirectory);
         $this->setSampleSize($sampleSize);
     }
 
-    public static function debug(array $input)
-    {
-        $root = $_SERVER['DOCUMENT_ROOT'];
-        echo '<hr>';
-        foreach ($input as $img) {
-            $url = str_replace($root, '', $img);
-            //$b = basename($img);
-            //$url = '/temporary/_importer_api/'.$b;
-            echo '<img style="height:100px;padding:4px;" src="' . $url . '"/>';//<br/>';
-        }
-    }
-
-
-    public static function normalizeUrl($url){
-        $parts = parse_url($url);
-        $path_parts = array_map('rawurldecode', explode('/', $parts['path']));
-        return
-            $parts['scheme'] . '://' .
-            $parts['host'] .
-            implode('/', array_map('rawurlencode', $path_parts))
-            ;
-    }
-
-    /**
-     * @return int
-     */
-    public function getTemporaryDirectoryPermissions()
-    {
-        return $this->temporaryDirectoryPermissions;
-    }
-
-    /**
-     * @param int $temporaryDirectoryPermissions
-     */
-    public function setTemporaryDirectoryPermissions($temporaryDirectoryPermissions)
-    {
-        $this->temporaryDirectoryPermissions = $temporaryDirectoryPermissions;
-    }
-
     /**
      * @param array $inputImages
      * @param float $enough
      * @return array
+     * @throws \Exception
      */
     public function extractDuplicates(array $inputImages, $enough = 0.05)
     {
@@ -116,6 +87,7 @@ class FastImageCompare
      * Compares each with each and return difference percentage in range 0..1
      * @param array $inputImages
      * @return array
+     * @throws \Exception
      */
     public function compareArray(array $inputImages)
     {
@@ -142,7 +114,7 @@ class FastImageCompare
      *
      * @param array $images
      * @return string[] normalized images absolute paths
-     * @throws Exception
+     * @throws \Exception
      */
     protected function normalizeArray(array $images)
     {
@@ -155,6 +127,11 @@ class FastImageCompare
     }
 
 
+    /**
+     * @param $imagePath
+     * @return array
+     * @throws \Gumlet\ImageResizeException|\Exception
+     */
     protected function normalize($imagePath){
         $normalized = [];
         if (file_exists($imagePath)) {
@@ -170,54 +147,18 @@ class FastImageCompare
             }
             $normalized[$this->getTemporaryDirectory() . $normalizedOutputFileName] = $imagePath;
         } else {
-            throw new Exception('Image not found :' . $imagePath);
+            throw new \Exception('Image not found :' . $imagePath);
         }
         return $normalized;
     }
 
     /**
-     * @return int
-     */
-    public function getSampleSize()
-    {
-        return $this->sampleSize;
-    }
-
-    /**
-     * @param int $sampleSize
-     */
-    public function setSampleSize($sampleSize)
-    {
-        $this->sampleSize = $sampleSize;
-    }
-
-    public function getTemporaryDirectory()
-    {
-        return $this->temporaryDirectory;
-    }
-
-    private function setTemporaryDirectory($directory)
-    {
-        if (is_null($directory)) {
-            $this->temporaryDirectory = sys_get_temp_dir() . DIRECTORY_SEPARATOR . '_fastImageCompare' . DIRECTORY_SEPARATOR;
-        } else {
-            $this->temporaryDirectory = $directory . DIRECTORY_SEPARATOR . '_fastImageCompare' . DIRECTORY_SEPARATOR;
-        }
-        if (!file_exists($this->getTemporaryDirectory())) {
-            mkdir($this->getTemporaryDirectory(), $this->getTemporaryDirectoryPermissions(), true);
-            // it seems that vagrant has problems with setting permissions when creating directory so lets chmod it directly
-            chmod($this->getTemporaryDirectory(), $this->getTemporaryDirectoryPermissions());
-        }
-        if (!is_writable($this->getTemporaryDirectory())) throw new \Exception('Temporary directory ' . $this->getTemporaryDirectory() . ' is not writable');
-    }
-
-
-    /**
-     * Internal compare images, this method assumes that images are in equal sizes
+     * Internal method to compare images, this method assumes that images are in equal sizes
      *
      * @param $imageLeft
      * @param $imageRight
      * @return float
+     * @throws \Exception
      */
     private function compareImages($imageLeft, $imageRight)
     {
@@ -243,26 +184,11 @@ class FastImageCompare
     }
 
     /**
-     * @return int
-     */
-    public function getFuzzPercentage()
-    {
-        return $this->fuzzPercentage;
-    }
-
-    /**
-     * @param int $fuzzPercentage
-     */
-    public function setFuzzPercentage($fuzzPercentage)
-    {
-        $this->fuzzPercentage = $fuzzPercentage;
-    }
-
-    /**
      * @param array $images
      * @param float $enoughDifference
      * @param int $matchMode
      * @return array
+     * @throws \Exception
      */
     public function extractUniques(array $images, $enoughDifference = 0.05, $matchMode = FastImageCompare::PREFER_LARGER_IMAGE)
     {
@@ -299,6 +225,7 @@ class FastImageCompare
      * @param array $inputImages
      * @param float $enoughDifference
      * @return array
+     * @throws \Exception
      */
     private function extractDuplicatesMap(array $inputImages, $enoughDifference = 0.05)
     {
@@ -316,22 +243,22 @@ class FastImageCompare
     }
 
     /**
-     * @param $map
-     * @param $duplicate
+     * @param $duplicateMap
+     * @param $duplicateItem
      * @param int $matchMode
      * @return int|null|string
      */
-    private function matchSelect($map, $duplicate, $matchMode = FastImageCompare::PREFER_LARGER_IMAGE)
+    private function matchSelect($duplicateMap, $duplicateItem, $matchMode = FastImageCompare::PREFER_LARGER_IMAGE)
     {
-        $mapEntry = $map[$duplicate];
+        $mapEntry = $duplicateMap[$duplicateItem];
         switch ($matchMode) {
             case self::PREFER_LARGER_DIFFERENCE:
                 //add $duplicate to $mapEntry with maximum difference in $mapEntry
                 $maxDiff = 0;
                 foreach ($mapEntry as $entry => $differenceValue)
-                    if ($entry === $duplicate)
+                    if ($entry === $duplicateItem)
                         $maxDiff = max($maxDiff, $differenceValue);
-                $mapEntry[$duplicate] = $maxDiff;
+                $mapEntry[$duplicateItem] = $maxDiff;
                 $sorted = ($mapEntry);
                 arsort($sorted);
                 reset($sorted);
@@ -340,10 +267,10 @@ class FastImageCompare
             case self::PREFER_LOWER_DIFFERENCE:
                 $maxDiff = 0;
                 foreach ($mapEntry as $entry => $differenceValue)
-                    if ($entry === $duplicate)
+                    if ($entry === $duplicateItem)
                         $maxDiff = min($maxDiff, $differenceValue);
 
-                $mapEntry[$duplicate] = $maxDiff;
+                $mapEntry[$duplicateItem] = $maxDiff;
                 $sorted = ($mapEntry);
                 asort($sorted);
                 reset($sorted);
@@ -352,7 +279,7 @@ class FastImageCompare
 
             case self::PREFER_LARGER_IMAGE:
                 $values = array_keys($mapEntry);
-                array_push($values, $duplicate);
+                array_push($values, $duplicateItem);
                 $output = array();
                 foreach ($values as $imagePath) {
                     $size = $this->getImageSizerInstance()->getImageSize($imagePath);
@@ -365,18 +292,167 @@ class FastImageCompare
                 return key($output);
                 break;
             default:
-                return $duplicate;// or key($mapEntry);
+                return $duplicateItem;// or key($mapEntry);
         }
     }
 
+
+    /**
+     * Clears files in cache folder older than $lifeTimeSeconds
+     * @param int $lifeTimeSeconds
+     */
+    public function clearCache($lifeTimeSeconds = 0)
+    {
+        //TODO
+    }
+
+    /**
+     * SETTERS & GETTERS
+     */
+
+
+    /**
+     * @return int
+     */
+    public function getFuzzPercentage()
+    {
+        return $this->fuzzPercentage;
+    }
+
+    /**
+     * @param int $fuzzPercentage
+     */
+    public function setFuzzPercentage($fuzzPercentage)
+    {
+        $this->fuzzPercentage = $fuzzPercentage;
+    }
+
+    /**
+     * @return int
+     */
+    public function getSampleSize()
+    {
+        return $this->sampleSize;
+    }
+
+    /**
+     * @param int $sampleSize
+     */
+    public function setSampleSize($sampleSize)
+    {
+        $this->sampleSize = $sampleSize;
+    }
+
+    public function getTemporaryDirectory()
+    {
+        return $this->temporaryDirectory;
+    }
+
+    /**
+     * @param $directory
+     * @throws \Exception
+     */
+    private function setTemporaryDirectory($directory)
+    {
+        if (is_null($directory)) {
+            $this->temporaryDirectory = sys_get_temp_dir() . DIRECTORY_SEPARATOR . '_fastImageCompare' . DIRECTORY_SEPARATOR;
+        } else {
+            $this->temporaryDirectory = $directory . DIRECTORY_SEPARATOR . '_fastImageCompare' . DIRECTORY_SEPARATOR;
+        }
+        if (!file_exists($this->getTemporaryDirectory())) {
+            mkdir($this->getTemporaryDirectory(), $this->getTemporaryDirectoryPermissions(), true);
+            // it seems that vagrant has problems with setting permissions when creating directory so lets chmod it directly
+            chmod($this->getTemporaryDirectory(), $this->getTemporaryDirectoryPermissions());
+        }
+        if (!is_writable($this->getTemporaryDirectory())) throw new \Exception('Temporary directory ' . $this->getTemporaryDirectory() . ' is not writable');
+    }
+
+
+    /**
+     * @return FastImageSize|null
+     */
     private function getImageSizerInstance()
     {
         if (is_null($this->imageSizerInstance)) $this->imageSizerInstance = new FastImageSize();
         return $this->imageSizerInstance;
     }
 
-    public function clear()
+
+    /**
+     * @return int
+     */
+    public function getTemporaryDirectoryPermissions()
     {
-        //TODO
+        return $this->temporaryDirectoryPermissions;
     }
+
+    /**
+     * @param int $temporaryDirectoryPermissions
+     */
+    public function setTemporaryDirectoryPermissions($temporaryDirectoryPermissions)
+    {
+        $this->temporaryDirectoryPermissions = $temporaryDirectoryPermissions;
+    }
+
+
+    /**
+     * UTILS
+     */
+
+
+    /**
+     * @param $path
+     * @param null $notLastModifiedDaysAgo
+     * @return array
+     */
+    public static function getDirContentsFiles($path, $notLastModifiedDaysAgo = null) {
+        $rii = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path));
+        $files = array();
+        foreach ($rii as $file)
+            /**
+             * @var $file SplFileInfo
+             */
+            if (!$file->isDir()) {
+                //jezeli podana jest data modyfikacji w dniach, tylko pliki ktore sa starsze niz ta data moga byc zwrocone
+                if (!is_null($notLastModifiedDaysAgo)){
+                    \Carbon\Carbon::setLocale('pl');
+                    $dt = \Carbon\Carbon::createFromTimestamp($file->getMTime());
+                    if ($notLastModifiedDaysAgo <= $dt->diffInDays()){
+                        $files[] = $file->getPathname();
+                    }
+                } else {
+                    $files[] = $file->getPathname();
+                }
+            }
+
+        return array_unique($files);
+    }
+
+    /**
+     * @see https://stackoverflow.com/a/8260942
+     * @param $url
+     * @return string
+     */
+    public static function normalizeUrl($url){
+        $parts = parse_url($url);
+        $path_parts = array_map('rawurldecode', explode('/', $parts['path']));
+        return
+            $parts['scheme'] . '://' .
+            $parts['host'] .
+            implode('/', array_map('rawurlencode', $path_parts))
+            ;
+    }
+
+    public static function debug(array $input)
+    {
+        $root = $_SERVER['DOCUMENT_ROOT'];
+        echo '<hr>';
+        foreach ($input as $img) {
+            $url = str_replace($root, '', $img);
+            //$b = basename($img);
+            //$url = '/temporary/_importer_api/'.$b;
+            echo '<img style="height:100px;padding:4px;" src="' . $url . '"/>';//<br/>';
+        }
+    }
+
 }
