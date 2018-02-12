@@ -61,8 +61,21 @@ class FastImageCompare
         echo '<hr>';
         foreach ($input as $img) {
             $url = str_replace($root, '', $img);
+            //$b = basename($img);
+            //$url = '/temporary/_importer_api/'.$b;
             echo '<img style="height:100px;padding:4px;" src="' . $url . '"/>';//<br/>';
         }
+    }
+
+
+    public static function normalizeUrl($url){
+        $parts = parse_url($url);
+        $path_parts = array_map('rawurldecode', explode('/', $parts['path']));
+        return
+            $parts['scheme'] . '://' .
+            $parts['host'] .
+            implode('/', array_map('rawurlencode', $path_parts))
+            ;
     }
 
     /**
@@ -251,8 +264,13 @@ class FastImageCompare
      * @param int $matchMode
      * @return array
      */
-    public function extractUniques(array $images, $enoughDifference = 0.05, $matchMode = FastImageCompare::PREFER_ANY)
+    public function extractUniques(array $images, $enoughDifference = 0.05, $matchMode = FastImageCompare::PREFER_LARGER_IMAGE)
     {
+        //TODO $matchMode bit flags
+//        if ($matchMode & PREFER_LARGER_IMAGE) {
+//            echo "PREFER_LARGER_IMAGE is set\n";
+//        }
+
         //find duplicates
         $duplicatesMap = $this->extractDuplicatesMap($images, $enoughDifference);
         $duplicates = array_keys($duplicatesMap);
@@ -303,7 +321,7 @@ class FastImageCompare
      * @param int $matchMode
      * @return int|null|string
      */
-    private function matchSelect($map, $duplicate, $matchMode = FastImageCompare::PREFER_ANY)
+    private function matchSelect($map, $duplicate, $matchMode = FastImageCompare::PREFER_LARGER_IMAGE)
     {
         $mapEntry = $map[$duplicate];
         switch ($matchMode) {
