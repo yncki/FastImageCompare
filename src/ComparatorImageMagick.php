@@ -9,13 +9,28 @@
 
 namespace pepeEpe\FastImageCompare;
 
-class ImageMagickComparator implements IImageComparator {
+class ComparatorImageMagick implements IComparable
+{
 
+    /**
+     * Absolute Error count of the number of different pixels (0=equal)
+     */
+    const METRIC_AE = -1;
 
-    const METRIC_AE         = -1;
-    const METRIC_MAE        = -2;
-    const METRIC_MSE        = -3;
-    const METRIC_RMSE       = -4;
+    /**
+     * Mean absolute error    (average channel error distance)
+     */
+    const METRIC_MAE = -2;
+
+    /**
+     * Mean squared error     (averaged squared error distance)
+     */
+    const METRIC_MSE = -3;
+
+    /**
+     * (sq)root mean squared error -- IE:  sqrt(MSE)
+     */
+    const METRIC_RMSE = -4;
 
     /**
      * @see \Imagick::METRIC_* constants
@@ -25,8 +40,7 @@ class ImageMagickComparator implements IImageComparator {
 
 
     /**
-     * Creates a ImageMagick comparator instance with default metric = MEAN ABSOLUTE ERROR
-     * @see \Imagick::METRIC_* constants for more details
+     * Creates a ImageMagick comparator instance with default metric METRIC_MAE
      * @param int $metric
      */
     public function __construct($metric = self::METRIC_MAE)
@@ -35,32 +49,32 @@ class ImageMagickComparator implements IImageComparator {
     }
 
     /**
-     * @param string $imageLeft
-     * @param string $imageRight
-     * @param float $enoughDifference
+     * @param $imageLeftNormalized string
+     * @param $imageRightNormalized string
+     * @param $imageLeftOriginal string
+     * @param $imageRightOriginal string
+     * @param $enoughDifference float
      * @return float percentage difference in range 0..1
      */
-    public function calculateDifference($imageLeft, $imageRight, $enoughDifference)
+    public function calculateDifference($imageLeftNormalized, $imageRightNormalized, $imageLeftOriginal, $imageRightOriginal, $enoughDifference)
     {
-
         $imageInstanceLeft = new \imagick();
         $imageInstanceRight = new \imagick();
 
         //must be set before readImage
         //if ($this->getMetric() == \Imagick::METRIC_ABSOLUTEERRORMETRIC) {
-        //fuzz is only used for AE metric
+        //fuzz is only used for AE metric but we set it always for caching purposes
         $imageInstanceLeft->SetOption('fuzz', (int)($enoughDifference * 100) . '%'); //http://www.imagemagick.org/script/command-line-options.php#define
-        //}
 
-        $imageInstanceLeft->readImage($imageLeft);
-        $imageInstanceRight->readImage($imageRight);
+        $imageInstanceLeft->readImage($imageLeftNormalized);
+        $imageInstanceRight->readImage($imageRightNormalized);
 
         $difference = $imageInstanceLeft->compareImages($imageInstanceRight, $this->getMetric());
         $difference = $difference[1];
 
-        switch ($this->getMetric()){
+        switch ($this->getMetric()) {
             case \Imagick::METRIC_ABSOLUTEERRORMETRIC:
-                $difference = ($difference > 0) ? $difference / ($imageInstanceLeft->getImageWidth() * $imageInstanceLeft->getImageHeight()):$difference;
+                $difference = ($difference > 0) ? $difference / ($imageInstanceLeft->getImageWidth() * $imageInstanceLeft->getImageHeight()) : $difference;
                 break;
         }
 
@@ -86,7 +100,7 @@ class ImageMagickComparator implements IImageComparator {
      */
     public function setMetric($metric)
     {
-        switch ($metric){
+        switch ($metric) {
             case self::METRIC_AE:
                 $this->metric = \Imagick::METRIC_ABSOLUTEERRORMETRIC;
                 break;
@@ -99,6 +113,8 @@ class ImageMagickComparator implements IImageComparator {
             case self::METRIC_RMSE:
                 $this->metric = \Imagick::METRIC_ROOTMEANSQUAREDERROR;
                 break;
+            default:
+                $this->metric = \Imagick::METRIC_MEANABSOLUTEERROR;
         }
     }
 }

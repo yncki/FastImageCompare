@@ -32,44 +32,51 @@ class FastImageCompare
     const PREFER_LOWER_DIFFERENCE = 4;
     const PREFER_LARGER_DIFFERENCE = 8;
 
-    /**
-     * Sample size to normalize before comparing [ width & height ]
-     * For most purposes sample size should be 8|16|32
-     * For more precise results use > 64 ( slower and more memory hungry )
-     *
-     * @var int
-     */
-    protected $sampleSize;
-
     protected $temporaryDirectory;
     protected $temporaryDirectoryPermissions = 0755;
 
     private $imageSizerInstance = null;
 
     /**
-     * @var IImageComparator[]
+     * @var IComparable[]
      */
     private $registeredComparators = [];
+
+    /**
+     * @var INormalizable[]
+     */
+    private $registeredNormalizers = [];
 
     /**
      * FastImageCompare constructor.
      *
      *
      * @param null $absoluteTemporaryDirectory When null, library will use system temporary directory
-     * @param int $sampleSize
-     * @param IImageComparator[]|IImageComparator|null $comparators array of comparator instances, when null a default comparator will be registered @see ImageMagickComparator with metric MEAN ABSOLUTE ERROR and fuzz=2
+     * @param IComparable[]|IComparable|null $comparators comparator instance(s), when null a default comparator will be registered @see ComparatorImageMagick with metric MEAN ABSOLUTE ERROR
+     * @param INormalizable[]|INormalizable|null $normalizers normalizer instance(s), when null a default normalizer will be registered @see NormalizerSizeType with sampleSize = 8
      * @throws \Exception
      */
-    public function __construct($absoluteTemporaryDirectory = null, $sampleSize = 8, $comparators = null)
+    public function __construct($absoluteTemporaryDirectory = null, $comparators = null, $normalizers = null)
     {
         $this->setTemporaryDirectory($absoluteTemporaryDirectory);
-        $this->setSampleSize($sampleSize);
+
         if (is_null($comparators)) {
-            $this->registerComparator(new ImageMagickComparator());
+            //register default comparator
+            $this->registerComparator(new ComparatorImageMagick(ComparatorImageMagick::METRIC_MAE));
         } elseif (is_array($comparators)) {
+            //set array of comparators
             $this->setComparators($comparators);
-        } elseif ($comparators instanceof IImageComparator){
+        } elseif ($comparators instanceof IComparable){
+            //register
             $this->registerComparator($comparators);
+        }
+
+        if (is_null($normalizers)){
+            $this->registerNormalizer(new NormalizerSizeType(8));
+        } elseif (is_array($normalizers)){
+            $this->setNormalizers($normalizers);
+        } elseif ($normalizers instanceof INormalizable){
+            $this->registerNormalizer($normalizers);
         }
     }
 
@@ -95,22 +102,23 @@ class FastImageCompare
     /**
      * Compares each with each using registered comparators and return difference percentage in range 0..1
      * @param array $inputImages
+     * @param $enoughDifference float
      * @return array
      * @throws \Exception
      */
     public function compareArray(array $inputImages,$enoughDifference)
     {
         $output = [];
-        $normalizedImages = $this->normalizeArray($inputImages);
+        $normalizedImages = $this->internalNormalizeArray($inputImages);
         $normalizedImagesIndexed = array_keys($normalizedImages);
         $imageNameKeys = array_keys($normalizedImagesIndexed);
         //compare each with each
         for ($x = 0; $x < count($normalizedImagesIndexed) - 1; $x++) {
             for ($y = $x + 1; $y < count($normalizedImagesIndexed); $y++) {
-                $imageLeft = $normalizedImagesIndexed[$imageNameKeys[$x]];
-                $imageRight = $normalizedImagesIndexed[$imageNameKeys[$y]];
-                $compareResult = $this->internalCompare($imageLeft, $imageRight,$enoughDifference);
-                $output[] = [$normalizedImages[$imageLeft], $normalizedImages[$imageRight], $compareResult];
+                $imageLeftNormalized = $normalizedImagesIndexed[$imageNameKeys[$x]];
+                $imageRightNormalized = $normalizedImagesIndexed[$imageNameKeys[$y]];
+                $compareResult = $this->internalCompareImage($imageLeftNormalized, $imageRightNormalized,$normalizedImages[$imageLeftNormalized],$normalizedImages[$imageRightNormalized],$enoughDifference);
+                $output[] = [$normalizedImages[$imageLeftNormalized], $normalizedImages[$imageRightNormalized], $compareResult];
             }
         }
         return $output;
@@ -124,60 +132,58 @@ class FastImageCompare
      * @return string[] normalized images absolute paths
      * @throws \Exception
      */
-    protected function normalizeArray(array $images)
+    protected function internalNormalizeArray(array $images)
     {
         $images = array_unique($images);
         $normalized = [];
         foreach ($images as $imagePath) {
-            $normalized = array_merge($normalized,$this->normalize($imagePath));
+            $normalized = array_merge($normalized,$this->internalNormalizeImage($imagePath));
         }
         return $normalized;
     }
-
 
     /**
      * @param $imagePath
      * @return array
-     * @throws \Gumlet\ImageResizeException|\Exception
+     * @throws \Exception
      */
-    protected function normalize($imagePath){
+    protected function internalNormalizeImage($imagePath){
         $normalized = [];
-        if (file_exists($imagePath)) {
-            $baseName = basename($imagePath);
-            $baseNameMd5 = md5($baseName);
-            $normalizedKey = '.n.' . $this->getSampleSize();
-            $normalizedOutputFileName = $baseNameMd5 . $normalizedKey;
-            if (!file_exists($this->getTemporaryDirectory().$normalizedOutputFileName)) {
-                $imageResize = new ImageResize($imagePath);
-                $imageResize->quality_jpg = 100;
-                $imageResize->quality_png = 9;
-                $imageResize->quality_webp = 100;
-                $imageResize->quality_truecolor = true;
-                $imageResize->resize($this->getSampleSize(), $this->getSampleSize(), true);
-                $imageResize->save($this->getTemporaryDirectory() . $normalizedOutputFileName);
-                unset($imageResize);
-            }
-            $normalized[$this->getTemporaryDirectory() . $normalizedOutputFileName] = $imagePath;
-        } else {
-            throw new \Exception('Image not found :' . $imagePath);
+        foreach ($this->getNormalizers() as $normalizer){
+            $result = $normalizer->process($imagePath,$this->getTemporaryDirectory(),$normalized);
+            $normalized = array_merge($normalized,$result);
         }
         return $normalized;
     }
 
     /**
-     * Internal method to compare images, this method assumes that images are in equal sizes
+     * Internal method to compare images by registered comparators
      *
-     * @param $imageLeft string
-     * @param $imageRight string
+     * @param $imageLeftNormalized string
+     * @param $imageRightNormalized string
+     * @param $imageLeftOriginal
+     * @param $imageRightOriginal
      * @param float $enoughDifference
-     * @return float[]
+     * @return float
      * @throws \Exception
      */
-    private function internalCompare($imageLeft, $imageRight, $enoughDifference)
+    private function internalCompareImage($imageLeftNormalized, $imageRightNormalized, $imageLeftOriginal, $imageRightOriginal, $enoughDifference)
     {
-        $results = [];
+        $results = 2.0; //max difference
+        $subResult = [];
         foreach ($this->registeredComparators as $comparatorIndex => $comparatorInstance){
-            $results = $comparatorInstance->calculateDifference($imageLeft,$imageRight,$enoughDifference);    //TODO
+            $diff = $comparatorInstance->calculateDifference($imageLeftNormalized,$imageRightNormalized,$imageLeftOriginal,$imageRightOriginal,$enoughDifference);
+            //if we are looking for 0 difference ( totaly equal images ) and comparator returns 0 then return 0%
+            if ($enoughDifference == 0 && $diff == 0) return 0.0;
+
+            //else add to subResult
+            $cls = get_class($comparatorInstance);
+            $subResult[$cls] = $diff;
+
+            //TODO pick from $subResult
+
+            return $diff;
+
         }
         return $results;
     }
@@ -210,7 +216,7 @@ class FastImageCompare
                 $keys = array_keys($dupFromMap);
                 $diff = array_intersect($keys, $picked);
                 if (count($diff) == 0) {
-                    $picked[] = $this->preferedPick($duplicatesMap, $duplicate, $preferOnDuplicate);
+                    $picked[] = $this->preferredPick($duplicatesMap, $duplicate, $preferOnDuplicate);
                 }
             }
         }
@@ -247,7 +253,7 @@ class FastImageCompare
      * @param int $preferOnDuplicate
      * @return int|null|string
      */
-    private function preferedPick($duplicateMap, $duplicateItem, $preferOnDuplicate = FastImageCompare::PREFER_LARGER_IMAGE)
+    private function preferredPick($duplicateMap, $duplicateItem, $preferOnDuplicate = FastImageCompare::PREFER_LARGER_IMAGE)
     {
         $mapEntry = $duplicateMap[$duplicateItem];
         switch ($preferOnDuplicate) {
@@ -281,10 +287,12 @@ class FastImageCompare
                 array_push($values, $duplicateItem);
                 $output = array();
                 foreach ($values as $imagePath) {
-                    $size = $this->getImageSizerInstance()->getImageSize($imagePath);
-                    if ($size)
+                    $size = $this->getImageSize($imagePath);
+                    if ($size) {
                         $output[$imagePath] = $size['width'] * $size['height'];
-                    //sort by size
+                    } else {
+                        $output[$imagePath] = 0;
+                    }
                 }
                 arsort($output);
                 reset($output);
@@ -298,33 +306,18 @@ class FastImageCompare
 
     /**
      * Clears files in cache folder older than $lifeTimeSeconds,
-     * @param int $lifeTimeSeconds , set < 0 to remove all files
+     * @param int $lifeTimeSeconds , set null to remove all files
      */
-    public function clearCache($lifeTimeSeconds = -1)
+    public function clearCache($lifeTimeSeconds = null)
     {
-        //TODO
+        $oldCache = Utils::getFilesOlderBy($lifeTimeSeconds);
+        Utils::removeFiles($oldCache);
     }
 
     /**
      * SETTERS & GETTERS
      */
 
-
-    /**
-     * @return int
-     */
-    public function getSampleSize()
-    {
-        return $this->sampleSize;
-    }
-
-    /**
-     * @param int $sampleSize
-     */
-    public function setSampleSize($sampleSize)
-    {
-        $this->sampleSize = $sampleSize;
-    }
 
     public function getTemporaryDirectory()
     {
@@ -380,21 +373,21 @@ class FastImageCompare
 
     /**
      * Register new comparator
-     * @param IImageComparator $comparatorInstance
+     * @param IComparable $comparatorInstance
      */
-    public function registerComparator(IImageComparator $comparatorInstance){
+    public function registerComparator(IComparable $comparatorInstance){
         $this->registeredComparators[] = $comparatorInstance;
     }
 
     /**
-     * @param IImageComparator[] $comparators
+     * @param IComparable[] $comparators
      */
     public function setComparators(array $comparators){
         $this->registeredComparators = $comparators;
     }
 
     /**
-     * @return IImageComparator[]
+     * @return IComparable[]
      */
     public function getComparators(){
         return $this->registeredComparators;
@@ -407,54 +400,47 @@ class FastImageCompare
         $this->setComparators([]);
     }
 
+    /**
+     * Register new Normalizer
+     * @param INormalizable $normalizerInstance
+     */
+    public function registerNormalizer(INormalizable $normalizerInstance){
+        $this->registeredNormalizers[] = $normalizerInstance;
+    }
+
+    /**
+     * @param INormalizable[] $normalizerInstances
+     */
+    public function setNormalizers(array $normalizerInstances){
+        $this->registeredNormalizers = $normalizerInstances;
+    }
+
+    /**
+     * @return INormalizable[]
+     */
+    public function getNormalizers(){
+        return $this->registeredNormalizers;
+    }
+
+    /**
+     * Clear normalizers
+     */
+    public function clearNormalizers(){
+        $this->setNormalizers([]);
+    }
 
     /**
      * UTILS
      */
 
-
     /**
-     * @param $path
-     * @param null $notLastModifiedDaysAgo
-     * @return array
+     * @param $imagePath
+     * @return array|bool
      */
-    public static function getDirContentsFiles($path, $notLastModifiedDaysAgo = null) {
-        $rii = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path));
-        $files = array();
-        foreach ($rii as $file)
-            /**
-             * @var $file SplFileInfo
-             */
-            if (!$file->isDir()) {
-                //jezeli podana jest data modyfikacji w dniach, tylko pliki ktore sa starsze niz ta data moga byc zwrocone
-                if (!is_null($notLastModifiedDaysAgo)){
-                    \Carbon\Carbon::setLocale('pl');
-                    $dt = \Carbon\Carbon::createFromTimestamp($file->getMTime());
-                    if ($notLastModifiedDaysAgo <= $dt->diffInDays()){
-                        $files[] = $file->getPathname();
-                    }
-                } else {
-                    $files[] = $file->getPathname();
-                }
-            }
-
-        return array_unique($files);
+    public function getImageSize($imagePath){
+        return $this->getImageSizerInstance()->getImageSize($imagePath);
     }
 
-    /**
-     * @see https://stackoverflow.com/a/8260942
-     * @param $url
-     * @return string
-     */
-    public static function normalizeUrl($url){
-        $parts = parse_url($url);
-        $path_parts = array_map('rawurldecode', explode('/', $parts['path']));
-        return
-            $parts['scheme'] . '://' .
-            $parts['host'] .
-            implode('/', array_map('rawurlencode', $path_parts))
-            ;
-    }
 
     public static function debug(array $input)
     {
