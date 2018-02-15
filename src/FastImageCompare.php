@@ -32,10 +32,22 @@ class FastImageCompare
     const PREFER_LOWER_DIFFERENCE = 4;
     const PREFER_LARGER_DIFFERENCE = 8;
 
+    private $debugEnabled = false;
+
+    /**
+     * @var
+     */
     protected $temporaryDirectory;
+
+    /**
+     * @var int
+     */
     protected $temporaryDirectoryPermissions = 0755;
 
-    private $imageSizerInstance = null;
+    /**
+     * @var null
+     */
+    static $imageSizerInstance = null;
 
     /**
      * @var IComparable[]
@@ -43,9 +55,22 @@ class FastImageCompare
     private $registeredComparators = [];
 
     /**
-     * @var INormalizable[]
+     * @return bool
      */
-    private $registeredNormalizers = [];
+    public function isDebugEnabled()
+    {
+        return $this->debugEnabled;
+    }
+
+    /**
+     * @param bool $debugEnabled
+     */
+    public function setDebugEnabled($debugEnabled)
+    {
+        $this->debugEnabled = $debugEnabled;
+    }
+
+
 
     /**
      * FastImageCompare constructor.
@@ -53,10 +78,9 @@ class FastImageCompare
      *
      * @param null $absoluteTemporaryDirectory When null, library will use system temporary directory
      * @param IComparable[]|IComparable|null $comparators comparator instance(s), when null a default comparator will be registered @see ComparatorImageMagick with metric MEAN ABSOLUTE ERROR
-     * @param INormalizable[]|INormalizable|null $normalizers normalizer instance(s), when null a default normalizer will be registered @see NormalizerSizeType with sampleSize = 8
      * @throws \Exception
      */
-    public function __construct($absoluteTemporaryDirectory = null, $comparators = null, $normalizers = null)
+    public function __construct($absoluteTemporaryDirectory = null, $comparators = null)
     {
         $this->setTemporaryDirectory($absoluteTemporaryDirectory);
 
@@ -71,13 +95,6 @@ class FastImageCompare
             $this->registerComparator($comparators);
         }
 
-        if (is_null($normalizers)){
-            $this->registerNormalizer(new NormalizerSizeType(8));
-        } elseif (is_array($normalizers)){
-            $this->setNormalizers($normalizers);
-        } elseif ($normalizers instanceof INormalizable){
-            $this->registerNormalizer($normalizers);
-        }
     }
 
     /**
@@ -109,52 +126,60 @@ class FastImageCompare
     public function compareArray(array $inputImages,$enoughDifference)
     {
         $output = [];
-        $normalizedImages = $this->internalNormalizeArray($inputImages);
-        $normalizedImagesIndexed = array_keys($normalizedImages);
-        $imageNameKeys = array_keys($normalizedImagesIndexed);
+        //$normalizedImages = $this->internalNormalizeArray($inputImages);
+        //$normalizedImagesIndexed = array_keys($normalizedImages);
+        $imageNameKeys = array_keys($inputImages);
         //compare each with each
-        for ($x = 0; $x < count($normalizedImagesIndexed) - 1; $x++) {
-            for ($y = $x + 1; $y < count($normalizedImagesIndexed); $y++) {
-                $imageLeftNormalized = $normalizedImagesIndexed[$imageNameKeys[$x]];
-                $imageRightNormalized = $normalizedImagesIndexed[$imageNameKeys[$y]];
-                $compareResult = $this->internalCompareImage($imageLeftNormalized, $imageRightNormalized,$normalizedImages[$imageLeftNormalized],$normalizedImages[$imageRightNormalized],$enoughDifference);
-                $output[] = [$normalizedImages[$imageLeftNormalized], $normalizedImages[$imageRightNormalized], $compareResult];
+        for ($x = 0; $x < count($inputImages) - 1; $x++) {
+            for ($y = $x + 1; $y < count($inputImages); $y++) {
+                $leftInput = $inputImages[$imageNameKeys[$x]];
+                $rightInput = $inputImages[$imageNameKeys[$y]];
+                $compareResult = $this->internalCompareImage($leftInput, $rightInput,$leftInput,$rightInput,$enoughDifference);
+                $output[] = [$leftInput, $rightInput, $compareResult];
             }
         }
         return $output;
     }
 
-    /**
-     * Creates normalized [aspectRatio & pixelCount ] version of images from array $images
-     *
-     * Common resolution is used for all input sampleSize x sampleSize @see FastImageCompare::setSampleSize()
-     * @param array $images
-     * @return string[] normalized images absolute paths
-     * @throws \Exception
-     */
-    protected function internalNormalizeArray(array $images)
-    {
-        $images = array_unique($images);
-        $normalized = [];
-        foreach ($images as $imagePath) {
-            $normalized = array_merge($normalized,$this->internalNormalizeImage($imagePath));
-        }
-        return $normalized;
-    }
-
-    /**
-     * @param $imagePath
-     * @return array
-     * @throws \Exception
-     */
-    protected function internalNormalizeImage($imagePath){
-        $normalized = [];
-        foreach ($this->getNormalizers() as $normalizer){
-            $result = $normalizer->process($imagePath,$this->getTemporaryDirectory(),$normalized);
-            $normalized = array_merge($normalized,$result);
-        }
-        return $normalized;
-    }
+//    /**
+//     * Creates normalized [aspectRatio & pixelCount ] version of images from array $images
+//     *
+//     * Common resolution is used for all input sampleSize x sampleSize @see FastImageCompare::setSampleSize()
+//     * @param array $images
+//     * @return string[] normalized images absolute paths
+//     * @throws \Exception
+//     */
+//    protected function internalNormalizeArray(array $images)
+//    {
+//        $images = array_unique($images);
+//        $normalized = [];
+//        foreach ($images as $imagePath) {
+//            $normalized = array_merge($normalized,$this->internalNormalizeImage($imagePath));
+//        }
+//        return $normalized;
+//    }
+//
+//    /**
+//     * @param $imagePath
+//     * @return array
+//     * @throws \Exception
+//     */
+//    protected function internalNormalizeImage($imagePath)
+//    {
+//        $normalized = [];
+//        $normalizers = $this->getNormalizers();
+//
+//        if (count($normalizers) == 0){
+//            //without normalizers passthru
+//            $normalized[$imagePath] = $imagePath;
+//        } else {
+//            foreach ($normalizers as $normalizer) {
+//                $result = $normalizer->process($imagePath, $this->getTemporaryDirectory(), $normalized);
+//                $normalized = array_merge($normalized, $result);
+//            }
+//        }
+//        return $normalized;
+//    }
 
     /**
      * Internal method to compare images by registered comparators
@@ -169,23 +194,39 @@ class FastImageCompare
      */
     private function internalCompareImage($imageLeftNormalized, $imageRightNormalized, $imageLeftOriginal, $imageRightOriginal, $enoughDifference)
     {
-        $results = 2.0; //max difference
-        $subResult = [];
-        foreach ($this->registeredComparators as $comparatorIndex => $comparatorInstance){
-            $diff = $comparatorInstance->calculateDifference($imageLeftNormalized,$imageRightNormalized,$imageLeftOriginal,$imageRightOriginal,$enoughDifference);
-            //if we are looking for 0 difference ( totaly equal images ) and comparator returns 0 then return 0%
-            if ($enoughDifference == 0 && $diff == 0) return 0.0;
+        //$results = 2.0; //max difference
+        $comparatorsSummary = 0.0;
+        $comparatorsSummarizedInstances = 0;
+        foreach ($this->registeredComparators as $comparatorIndex => $comparatorInstance)
+        {
+            $calculatedDifference = $comparatorInstance->difference($imageLeftNormalized,$imageRightNormalized,$enoughDifference,$this);
+//            $this->printDebug("Compare using ".get_class($comparatorInstance)." ".basename($imageLeftOriginal).' vs '.basename($imageRightOriginal).' | S = '.$enoughDifference,['resultDifference'=>$calculatedDifference]);
+            /**
+             * jesli komparator dziala w trybie dokladnym @see IComparable::EXCLUDE, tzn ze jesli znajdzie 100% roznicy to nie trzeba dalej porownywac
+             * i moze zostac zwrocony wynik , w przeciwnym wypadku niech kontynuuje [PASSTHROUGH] i sprawdza nastepne
+             * komparatory
+             */
+            if ($comparatorInstance->getComparableMode() == IComparable::EXCLUDE && $calculatedDifference <= $enoughDifference)
+            {
+                return $calculatedDifference;
+            }
+            /**
+             * Jesli przekazujemy dalej , musimy wziac pod uwage wszystkie komparatory i na podstawie wyniku ze wszystkich
+             * zadecydowac czy jest rowny czy rozny
+             */
 
-            //else add to subResult
-            $cls = get_class($comparatorInstance);
-            $subResult[$cls] = $diff;
 
-            //TODO pick from $subResult
-
-            return $diff;
-
+            if ($comparatorInstance->getComparableMode() != IComparable::EXCLUDE)
+            {
+                $comparatorsSummary += $calculatedDifference;
+                $comparatorsSummarizedInstances++;
+            }
         }
-        return $results;
+
+        /**
+         * obliczmy srednia z komparatorow
+         */
+        return ($comparatorsSummary > 0 && $comparatorsSummarizedInstances > 0) ? floatval($comparatorsSummary) / floatval($comparatorsSummarizedInstances) : $comparatorsSummary;
     }
 
     /**
@@ -244,6 +285,8 @@ class FastImageCompare
                 $output[$data[1]][$data[0]] = $data[2];
             }
         }
+        $this->printDebug('extractDuplicatesMap',$output);
+        $this->printDebug('$compared',$compared);
         return $output;
     }
 
@@ -310,7 +353,7 @@ class FastImageCompare
      */
     public function clearCache($lifeTimeSeconds = null)
     {
-        $oldCache = Utils::getFilesOlderBy($lifeTimeSeconds);
+        $oldCache = Utils::getFilesOlderBy($this->getTemporaryDirectory(),$lifeTimeSeconds);
         Utils::removeFiles($oldCache);
     }
 
@@ -338,7 +381,7 @@ class FastImageCompare
         if (!file_exists($this->getTemporaryDirectory())) {
             mkdir($this->getTemporaryDirectory(), $this->getTemporaryDirectoryPermissions(), true);
             // it seems that vagrant has problems with setting permissions when creating directory so lets chmod it directly
-            chmod($this->getTemporaryDirectory(), $this->getTemporaryDirectoryPermissions());
+            @chmod($this->getTemporaryDirectory(), $this->getTemporaryDirectoryPermissions());
         }
         if (!is_writable($this->getTemporaryDirectory())) throw new \Exception('Temporary directory ' . $this->getTemporaryDirectory() . ' is not writable');
     }
@@ -349,8 +392,8 @@ class FastImageCompare
      */
     private function getImageSizerInstance()
     {
-        if (is_null($this->imageSizerInstance)) $this->imageSizerInstance = new FastImageSize();
-        return $this->imageSizerInstance;
+        if (is_null(self::$imageSizerInstance)) self::$imageSizerInstance = new FastImageSize();
+        return self::$imageSizerInstance;
     }
 
 
@@ -372,61 +415,38 @@ class FastImageCompare
 
 
     /**
-     * Register new comparator
+     * Register new comparator with default mode @see IComparable::PASSTHROUGH constants
      * @param IComparable $comparatorInstance
+     * @param int $mode IComparable mode
      */
-    public function registerComparator(IComparable $comparatorInstance){
+    public function registerComparator(IComparable $comparatorInstance, $mode = IComparable::PASSTHROUGH)
+    {
         $this->registeredComparators[] = $comparatorInstance;
+        $comparatorInstance->setComparableMode($mode);
     }
 
     /**
      * @param IComparable[] $comparators
      */
-    public function setComparators(array $comparators){
+    public function setComparators(array $comparators)
+    {
         $this->registeredComparators = $comparators;
     }
 
     /**
      * @return IComparable[]
      */
-    public function getComparators(){
+    public function getComparators()
+    {
         return $this->registeredComparators;
     }
 
     /**
      * Clear comparators
      */
-    public function clearComparators(){
+    public function clearComparators()
+    {
         $this->setComparators([]);
-    }
-
-    /**
-     * Register new Normalizer
-     * @param INormalizable $normalizerInstance
-     */
-    public function registerNormalizer(INormalizable $normalizerInstance){
-        $this->registeredNormalizers[] = $normalizerInstance;
-    }
-
-    /**
-     * @param INormalizable[] $normalizerInstances
-     */
-    public function setNormalizers(array $normalizerInstances){
-        $this->registeredNormalizers = $normalizerInstances;
-    }
-
-    /**
-     * @return INormalizable[]
-     */
-    public function getNormalizers(){
-        return $this->registeredNormalizers;
-    }
-
-    /**
-     * Clear normalizers
-     */
-    public function clearNormalizers(){
-        $this->setNormalizers([]);
     }
 
     /**
@@ -437,10 +457,19 @@ class FastImageCompare
      * @param $imagePath
      * @return array|bool
      */
-    public function getImageSize($imagePath){
+    public function getImageSize($imagePath)
+    {
         return $this->getImageSizerInstance()->getImageSize($imagePath);
     }
 
+    private function printDebug($label,$data)
+    {
+        if (!$this->isDebugEnabled()) return;
+        echo "<br/><b>$label</b>";
+        if (!is_null($data))
+        dump($data);
+        echo '<br/>';
+    }
 
     public static function debug(array $input)
     {

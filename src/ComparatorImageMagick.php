@@ -9,7 +9,7 @@
 
 namespace pepeEpe\FastImageCompare;
 
-class ComparatorImageMagick implements IComparable
+class ComparatorImageMagick extends ComparableBase
 {
 
     /**
@@ -32,20 +32,42 @@ class ComparatorImageMagick implements IComparable
      */
     const METRIC_RMSE = -4;
 
+
+    /**
+     * normalized cross correlation (1 = similar)
+     */
+    const METRIC_NCC = -5;
+
     /**
      * @see \Imagick::METRIC_* constants
      * @var int
      */
     private $metric;
 
+//    /**
+//     * Equalize ( aka normalize ) images before comparison ,
+//     * @var bool
+//     */
+//    private $equalize = true;
+
 
     /**
      * Creates a ImageMagick comparator instance with default metric METRIC_MAE
      * @param int $metric
+     * @param INormalizer[] $normalizers
      */
-    public function __construct($metric = self::METRIC_MAE)
+    public function __construct($metric = self::METRIC_MAE,$normalizers = null)
     {
         $this->setMetric($metric);
+
+        if (is_null($normalizers)){
+            $this->registerNormalizer(new NormalizerSizeType(8));
+        } elseif (is_array($normalizers)){
+            $this->setNormalizers($normalizers);
+        } elseif ($normalizers instanceof INormalizer){
+            $this->registerNormalizer($normalizers);
+        }
+
     }
 
     /**
@@ -62,7 +84,6 @@ class ComparatorImageMagick implements IComparable
         $imageInstanceRight = new \imagick();
 
         //must be set before readImage
-        //if ($this->getMetric() == \Imagick::METRIC_ABSOLUTEERRORMETRIC) {
         //fuzz is only used for AE metric but we set it always for caching purposes
         $imageInstanceLeft->SetOption('fuzz', (int)($enoughDifference * 100) . '%'); //http://www.imagemagick.org/script/command-line-options.php#define
 
@@ -70,6 +91,7 @@ class ComparatorImageMagick implements IComparable
         $imageInstanceRight->readImage($imageRightNormalized);
 
         $difference = $imageInstanceLeft->compareImages($imageInstanceRight, $this->getMetric());
+//        $difference = $imageInstanceLeft->compareImages($imageInstanceRight, \Imagick::METRIC_NORMALIZEDCROSSCORRELATIONERRORMETRIC);
         $difference = $difference[1];
 
         switch ($this->getMetric()) {
@@ -113,8 +135,30 @@ class ComparatorImageMagick implements IComparable
             case self::METRIC_RMSE:
                 $this->metric = \Imagick::METRIC_ROOTMEANSQUAREDERROR;
                 break;
+            case self::METRIC_NCC:
+                $this->metric = \Imagick::METRIC_NORMALIZEDCROSSCORRELATIONERRORMETRIC;
+                break;
             default:
                 $this->metric = \Imagick::METRIC_MEANABSOLUTEERROR;
         }
     }
+
+//    /**
+//     * @return bool
+//     */
+//    public function isEqualize()
+//    {
+//        return $this->equalize;
+//    }
+//
+//    /**
+//     * @param bool $equalize
+//     */
+//    public function setEqualize($equalize)
+//    {
+//        $this->equalize = $equalize;
+//    }
+
+
+
 }

@@ -12,44 +12,40 @@ namespace pepeEpe\FastImageCompare;
 
 use Gumlet\ImageResize;
 
-class NormalizerSizeType implements INormalizable
+class NormalizerSizeType extends NormalizerBase
 {
-
-    /**
-     * @var int sample size to normalize , preffered POW
-     */
     private $sampleSize;
 
     public function __construct($sampleSize = 8)
     {
-        $this->setSampleSize($sampleSize);
+        parent::__construct();
+        $this->setSampleSize(max(2,$sampleSize));
     }
 
-    public function process($imagePath, $tempDir, &$normalizedPipeline)
+    public function normalize($imagePath, $tempDir)
     {
-        $result = [];
+        $result = $imagePath;
         if (file_exists($imagePath)) {
-            $baseName = basename($imagePath);
-            $baseNameMd5 = md5($baseName);
-            $normalizedKey = '.n.' . $this->getSampleSize();
-            $normalizedOutputFileName = $baseNameMd5 . $normalizedKey . '.png';
-
-            if (!file_exists($tempDir.$normalizedOutputFileName)) {
+            $cacheFileName = $this->getCachedFile($imagePath,$tempDir);
+            if (!file_exists($cacheFileName)) {
                 $imageResize = new ImageResize($imagePath);
                 $imageResize->quality_jpg = 100;
                 $imageResize->quality_png = 9;
                 $imageResize->quality_webp = 100;
                 $imageResize->quality_truecolor = true;
                 $imageResize->resize($this->getSampleSize(), $this->getSampleSize(), true);
-                $imageResize->save($tempDir . $normalizedOutputFileName,IMAGETYPE_PNG);
+                $imageResize->save($cacheFileName,IMAGETYPE_PNG);
                 unset($imageResize);
             }
-            //TODO change key format
-            $result[$tempDir . $normalizedOutputFileName] = $imagePath;
+            return $cacheFileName;
         }
         return $result;
     }
 
+    public function getCacheKey($imagePath)
+    {
+        return md5($imagePath).'.n'.$this->getSampleSize().'.png';
+    }
 
     /**
      * @return int
@@ -66,9 +62,5 @@ class NormalizerSizeType implements INormalizable
     {
         $this->sampleSize = $sampleSize;
     }
-
-
-
-
 
 }

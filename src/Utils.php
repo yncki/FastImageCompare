@@ -43,6 +43,30 @@ class Utils
         return array_unique($files);
     }
 
+    public static function getFilesIn($path)
+    {
+        $rii = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path));
+        $files = array();
+        foreach ($rii as $file)
+            /**
+             * @var $file SplFileInfo
+             */
+            if (!$file->isDir()) {
+                $files[] = $file->getPathname();
+            }
+        return array_unique($files);
+    }
+
+    /**
+     * @param $classOrObject
+     * @return string
+     */
+    public static function getClassNameWithoutNamespace($classOrObject) {
+        if (is_object($classOrObject)) $classOrObject = get_class($classOrObject);
+        $path = explode('\\', ($classOrObject));
+        return array_pop($path);
+    }
+
     /**
      * @param $filesArray
      */
