@@ -9,28 +9,21 @@
 
 namespace pepeEpe\FastImageCompare;
 
-class NormalizerHistogram extends NormalizerBase {
+class NormalizerHistogram extends NormalizableBase {
     /**
      * @param $imagePath
+     * @param $output
      * @param $tempDir
      * @return string path
      */
-    public function normalize($imagePath, $tempDir)
+    public function normalize($imagePath,$output, $tempDir)
     {
-        $result = $imagePath;
-        if (file_exists($imagePath)) {
-            $cacheFileName = $this->getCachedFile($imagePath,$tempDir);
-            if (!file_exists($cacheFileName)) {
-                $imageInstanceLeft = new \imagick();
-                $imageInstanceLeft->readImage($imagePath);
-                $imageInstanceLeft->normalizeImage();
-                $imageInstanceLeft->writeImage($cacheFileName);
-                $imageInstanceLeft->clear();
-                unset($imageInstanceLeft);
-            }
-            return $cacheFileName;
-        }
-        return $result;
+        $imageInstanceLeft = new \imagick();
+        $imageInstanceLeft->readImage($imagePath);
+        $imageInstanceLeft->normalizeImage();
+        $imageInstanceLeft->writeImage($output);
+        $imageInstanceLeft->clear();
+        return $output;
 
 
     }

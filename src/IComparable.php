@@ -11,7 +11,7 @@ namespace pepeEpe\FastImageCompare;
 
 interface IComparable {
 
-    const EXCLUDE     = 0;
+    const STRICT     = 0;
     const PASSTHROUGH = 1;
 
     /**
@@ -20,9 +20,10 @@ interface IComparable {
      * @param $imageLeftOriginal string
      * @param $imageRightOriginal string
      * @param $enoughDifference float
+     * @param $instance FastImageCompare
      * @return float in range 0..1
      */
-    public function calculateDifference($imageLeftNormalized, $imageRightNormalized,$imageLeftOriginal,$imageRightOriginal, $enoughDifference);
+    public function calculateDifference($imageLeftNormalized, $imageRightNormalized, $imageLeftOriginal, $imageRightOriginal, $enoughDifference, FastImageCompare $instance);
 
     /**
      * @param $inputLeft
@@ -45,15 +46,15 @@ interface IComparable {
     public function setComparableMode($comparableMode);
 
 
-    public function registerNormalizer(INormalizer $normalizerInstance);
+    public function registerNormalizer(INormalizable $normalizerInstance);
 
     /**
-     * @param INormalizer[] $normalizerInstances
+     * @param INormalizable[] $normalizerInstances
      */
     public function setNormalizers(array $normalizerInstances);
 
     /**
-     * @return INormalizer[]
+     * @return INormalizable[]
      */
     public function getNormalizers();
 
@@ -61,5 +62,8 @@ interface IComparable {
      * Clear normalizers
      */
     public function clearNormalizers();
+
+
+    public function generateCacheKey($imageLeft,$imageRight);
 
 }

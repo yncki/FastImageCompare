@@ -10,7 +10,7 @@
 namespace pepeEpe\FastImageCompare;
 
 
-abstract class NormalizerBase implements INormalizer {
+abstract class NormalizableBase implements INormalizable {
 
     protected $ensuredCacheDirExists = null;
 
@@ -27,7 +27,7 @@ abstract class NormalizerBase implements INormalizer {
     /**
      * @return string
      */
-    public function getShortClassName()
+    private function getShortClassName()
     {
         return $this->shortClassName;
     }
@@ -36,11 +36,12 @@ abstract class NormalizerBase implements INormalizer {
      * @param $filePath
      * @return string
      */
-    public function buildCachePath($filePath){
+    private function buildCachePath($filePath){
         return $this->getShortClassName().DIRECTORY_SEPARATOR.$this->getCacheKey($filePath);
     }
 
-    public function getCachedFile($filePath,$temporaryDirectory){
+    public function getCachedFile($filePath,$temporaryDirectory)
+    {
         $dest =  $temporaryDirectory.$this->buildCachePath($filePath);
         if (!$this->ensuredCacheDirExists){
             $this->ensuredCacheDirExists  = dirname($dest);

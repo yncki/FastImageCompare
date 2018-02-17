@@ -15,6 +15,7 @@ use FastImageSize\FastImageSize;
 use RecursiveIteratorIterator;
 use RecursiveDirectoryIterator;
 use SplFileInfo;
+use Symfony\Component\Cache\Adapter\AdapterInterface;
 
 /**
  * Class FastImageCompare
@@ -29,20 +30,29 @@ class FastImageCompare
 
     const PREFER_ANY = 1;
     const PREFER_LARGER_IMAGE = 2;
-    const PREFER_LOWER_DIFFERENCE = 4;
-    const PREFER_LARGER_DIFFERENCE = 8;
+    const PREFER_SMALLER_IMAGE = 4;
+    const PREFER_LOWER_DIFFERENCE = 8;
+    const PREFER_LARGER_DIFFERENCE = 16;
 
+    /**
+     * @var AdapterInterface
+     */
+    private $cacheAdapter;
+
+    /**
+     * @var bool
+     */
     private $debugEnabled = false;
 
     /**
      * @var
      */
-    protected $temporaryDirectory;
+    private $temporaryDirectory;
 
     /**
      * @var int
      */
-    protected $temporaryDirectoryPermissions = 0755;
+    private $temporaryDirectoryPermissions = 0777;
 
     /**
      * @var null
@@ -55,22 +65,9 @@ class FastImageCompare
     private $registeredComparators = [];
 
     /**
-     * @return bool
+     * @var int
      */
-    public function isDebugEnabled()
-    {
-        return $this->debugEnabled;
-    }
-
-    /**
-     * @param bool $debugEnabled
-     */
-    public function setDebugEnabled($debugEnabled)
-    {
-        $this->debugEnabled = $debugEnabled;
-    }
-
-
+    private $chunkSize = 8;
 
     /**
      * FastImageCompare constructor.
@@ -78,11 +75,13 @@ class FastImageCompare
      *
      * @param null $absoluteTemporaryDirectory When null, library will use system temporary directory
      * @param IComparable[]|IComparable|null $comparators comparator instance(s), when null a default comparator will be registered @see ComparatorImageMagick with metric MEAN ABSOLUTE ERROR
+     * @param $cacheAdapter AdapterInterface
      * @throws \Exception
      */
-    public function __construct($absoluteTemporaryDirectory = null, $comparators = null)
+    public function __construct($absoluteTemporaryDirectory = null, $comparators = null , $cacheAdapter = null)
     {
         $this->setTemporaryDirectory($absoluteTemporaryDirectory);
+        $this->setCacheAdapter($cacheAdapter);
 
         if (is_null($comparators)) {
             //register default comparator
@@ -98,115 +97,58 @@ class FastImageCompare
     }
 
     /**
-     * @param array $inputImages
-     * @param float $enough percentage 0..1
-     * @return array
-     * @throws \Exception
-     */
-    public function extractDuplicates(array $inputImages, $enough = 0.05)
-    {
-        $output = [];
-        $compared = $this->compareArray($inputImages,$enough);
-        foreach ($compared as $data) {
-            if ($data[2] <= $enough) {
-                $output[] = $data[0];
-                $output[] = $data[1];
-            }
-        }
-        return array_unique($output);
-    }
-
-    /**
      * Compares each with each using registered comparators and return difference percentage in range 0..1
      * @param array $inputImages
      * @param $enoughDifference float
      * @return array
      * @throws \Exception
      */
-    public function compareArray(array $inputImages,$enoughDifference)
+    private function compareArray(array $inputImages,$enoughDifference)
     {
+        $inputImages = array_unique($inputImages);
         $output = [];
-        //$normalizedImages = $this->internalNormalizeArray($inputImages);
-        //$normalizedImagesIndexed = array_keys($normalizedImages);
         $imageNameKeys = array_keys($inputImages);
         //compare each with each
         for ($x = 0; $x < count($inputImages) - 1; $x++) {
             for ($y = $x + 1; $y < count($inputImages); $y++) {
                 $leftInput = $inputImages[$imageNameKeys[$x]];
                 $rightInput = $inputImages[$imageNameKeys[$y]];
-                $compareResult = $this->internalCompareImage($leftInput, $rightInput,$leftInput,$rightInput,$enoughDifference);
+                $compareResult = $this->internalCompareImage($leftInput, $rightInput,$enoughDifference);
                 $output[] = [$leftInput, $rightInput, $compareResult];
             }
         }
         return $output;
     }
 
-//    /**
-//     * Creates normalized [aspectRatio & pixelCount ] version of images from array $images
-//     *
-//     * Common resolution is used for all input sampleSize x sampleSize @see FastImageCompare::setSampleSize()
-//     * @param array $images
-//     * @return string[] normalized images absolute paths
-//     * @throws \Exception
-//     */
-//    protected function internalNormalizeArray(array $images)
-//    {
-//        $images = array_unique($images);
-//        $normalized = [];
-//        foreach ($images as $imagePath) {
-//            $normalized = array_merge($normalized,$this->internalNormalizeImage($imagePath));
-//        }
-//        return $normalized;
-//    }
-//
-//    /**
-//     * @param $imagePath
-//     * @return array
-//     * @throws \Exception
-//     */
-//    protected function internalNormalizeImage($imagePath)
-//    {
-//        $normalized = [];
-//        $normalizers = $this->getNormalizers();
-//
-//        if (count($normalizers) == 0){
-//            //without normalizers passthru
-//            $normalized[$imagePath] = $imagePath;
-//        } else {
-//            foreach ($normalizers as $normalizer) {
-//                $result = $normalizer->process($imagePath, $this->getTemporaryDirectory(), $normalized);
-//                $normalized = array_merge($normalized, $result);
-//            }
-//        }
-//        return $normalized;
-//    }
 
     /**
      * Internal method to compare images by registered comparators
      *
-     * @param $imageLeftNormalized string
-     * @param $imageRightNormalized string
-     * @param $imageLeftOriginal
-     * @param $imageRightOriginal
+     * @param $inputLeft string
+     * @param $inputRight string
      * @param float $enoughDifference
      * @return float
      * @throws \Exception
      */
-    private function internalCompareImage($imageLeftNormalized, $imageRightNormalized, $imageLeftOriginal, $imageRightOriginal, $enoughDifference)
+    private function internalCompareImage($inputLeft, $inputRight, $enoughDifference)
     {
-        //$results = 2.0; //max difference
         $comparatorsSummary = 0.0;
         $comparatorsSummarizedInstances = 0;
         foreach ($this->registeredComparators as $comparatorIndex => $comparatorInstance)
         {
-            $calculatedDifference = $comparatorInstance->difference($imageLeftNormalized,$imageRightNormalized,$enoughDifference,$this);
-//            $this->printDebug("Compare using ".get_class($comparatorInstance)." ".basename($imageLeftOriginal).' vs '.basename($imageRightOriginal).' | S = '.$enoughDifference,['resultDifference'=>$calculatedDifference]);
+
+            $calculatedDifference = $comparatorInstance->difference($inputLeft,$inputRight,$enoughDifference,$this);
+
+            dump($calculatedDifference);
+            dump($inputLeft);
+            dump($inputRight);
+
             /**
-             * jesli komparator dziala w trybie dokladnym @see IComparable::EXCLUDE, tzn ze jesli znajdzie 100% roznicy to nie trzeba dalej porownywac
+             * jesli komparator dziala w trybie dokladnym @see IComparable::STRICT, tzn ze jesli znajdzie roznice to nie trzeba dalej porownywac
              * i moze zostac zwrocony wynik , w przeciwnym wypadku niech kontynuuje [PASSTHROUGH] i sprawdza nastepne
              * komparatory
              */
-            if ($comparatorInstance->getComparableMode() == IComparable::EXCLUDE && $calculatedDifference <= $enoughDifference)
+            if ($comparatorInstance->getComparableMode() == IComparable::STRICT && $calculatedDifference <= $enoughDifference)
             {
                 return $calculatedDifference;
             }
@@ -216,7 +158,7 @@ class FastImageCompare
              */
 
 
-            if ($comparatorInstance->getComparableMode() != IComparable::EXCLUDE)
+            if ($comparatorInstance->getComparableMode() != IComparable::STRICT)
             {
                 $comparatorsSummary += $calculatedDifference;
                 $comparatorsSummarizedInstances++;
@@ -224,9 +166,51 @@ class FastImageCompare
         }
 
         /**
-         * obliczmy srednia z komparatorow
+         * return avg from non STRICT comparators
          */
         return ($comparatorsSummary > 0 && $comparatorsSummarizedInstances > 0) ? floatval($comparatorsSummary) / floatval($comparatorsSummarizedInstances) : $comparatorsSummary;
+    }
+
+
+    /**
+     * @param $imageA
+     * @param $imageB
+     * @param float $enoughDifference
+     * @return bool
+     */
+    public function areSimilar($imageA,$imageB,$enoughDifference = 0.05){
+        return (count($this->findDuplicates([$imageA,$imageB],$enoughDifference)) == 2);
+    }
+
+    /**
+     * @param $imageA
+     * @param $imageB
+     * @param float $enoughDifference
+     * @return bool
+     */
+    public function areDifferent($imageA,$imageB,$enoughDifference = 0.05){
+        return !$this->areSimilar($imageA,$imageB,$enoughDifference);
+    }
+
+    /**
+     * @param array $inputImages
+     * @param float $enough percentage 0..1
+     * @return array
+     * @throws \Exception
+     */
+    public function findDuplicates(array $inputImages, $enough = 0.05)
+    {
+        $inputImages = array_unique($inputImages);
+        $output = [];
+        $compared = $this->compareArray($inputImages,$enough);
+        foreach ($compared as $data) {
+            if ($data[2] <= $enough) {
+                $output[] = $data[0];
+                $output[] = $data[1];
+            }
+        }
+        sort($output);
+        return array_unique($output);
     }
 
     /**
@@ -236,7 +220,7 @@ class FastImageCompare
      * @return array
      * @throws \Exception
      */
-    public function extractUniques(array $images, $enoughDifference = 0.05, $preferOnDuplicate = FastImageCompare::PREFER_LARGER_IMAGE)
+    public function findUniques(array $images, $enoughDifference = 0.05, $preferOnDuplicate = FastImageCompare::PREFER_LARGER_IMAGE)
     {
         //TODO $matchMode bit flags
 //        if ($matchMode & PREFER_LARGER_IMAGE) {
@@ -261,7 +245,9 @@ class FastImageCompare
                 }
             }
         }
-        return array_merge($picked, $withoutDuplicates);
+        $s =  array_merge($picked, $withoutDuplicates);
+        sort($s);
+        return $s;
     }
 
 
@@ -273,20 +259,48 @@ class FastImageCompare
      * @return array
      * @throws \Exception
      */
-    public function extractDuplicatesMap(array $inputImages, $enoughDifference = 0.05)
+    private function extractDuplicatesMap(array $inputImages, $enoughDifference = 0.05)
     {
-        $compared = $this->compareArray($inputImages,$enoughDifference);
+        //TODO implement better chunking , recursive
+        $inputImages = array_unique($inputImages);
         $output = [];
-        foreach ($compared as $data) {
-            if ($data[2] <= $enoughDifference) {
-                if (!isset($output[$data[0]])) $output[$data[0]] = array();
-                if (!isset($output[$data[1]])) $output[$data[1]] = array();
-                $output[$data[0]][$data[1]] = $data[2];
-                $output[$data[1]][$data[0]] = $data[2];
+        $chunks = array_chunk($inputImages,$this->getChunkSize(),true);
+        $chunkedArray = [];
+        $needRechunk = count($chunks) > 1;
+
+        foreach ($chunks as $chunk) {
+            $compared = $this->compareArray($chunk, $enoughDifference);
+            foreach ($compared as $data)
+            {
+                if (!$needRechunk) {
+                    if ($data[2] <= $enoughDifference) {
+                        if (!isset($output[$data[0]])) $output[$data[0]] = array();
+                        if (!isset($output[$data[1]])) $output[$data[1]] = array();
+                        $output[$data[0]][$data[1]] = $data[2];
+                        $output[$data[1]][$data[0]] = $data[2];
+                    }
+                } else {
+                    $chunkedArray[] = $data[0];
+                    $chunkedArray[] = $data[1];
+                }
             }
         }
+
+        if ($needRechunk){
+            $output = [];
+            $chunkedArray = array_unique($chunkedArray);
+            $compared = $this->compareArray($chunkedArray, $enoughDifference);
+            foreach ($compared as $data) {
+                if ($data[2] <= $enoughDifference) {
+                    if (!isset($output[$data[0]])) $output[$data[0]] = array();
+                    if (!isset($output[$data[1]])) $output[$data[1]] = array();
+                    $output[$data[0]][$data[1]] = $data[2];
+                    $output[$data[1]][$data[0]] = $data[2];
+                }
+            }
+        }
+
         $this->printDebug('extractDuplicatesMap',$output);
-        $this->printDebug('$compared',$compared);
         return $output;
     }
 
@@ -326,6 +340,7 @@ class FastImageCompare
                 break;
 
             case self::PREFER_LARGER_IMAGE:
+            case self::PREFER_SMALLER_IMAGE:
                 $values = array_keys($mapEntry);
                 array_push($values, $duplicateItem);
                 $output = array();
@@ -337,7 +352,11 @@ class FastImageCompare
                         $output[$imagePath] = 0;
                     }
                 }
-                arsort($output);
+                if ($preferOnDuplicate == self::PREFER_LARGER_IMAGE) {
+                    arsort($output);
+                } else {
+                    asort($output);
+                }
                 reset($output);
                 return key($output);
                 break;
@@ -355,6 +374,7 @@ class FastImageCompare
     {
         $oldCache = Utils::getFilesOlderBy($this->getTemporaryDirectory(),$lifeTimeSeconds);
         Utils::removeFiles($oldCache);
+        if (!is_null($this->getCacheAdapter())) $this->getCacheAdapter()->clear();
     }
 
     /**
@@ -450,6 +470,61 @@ class FastImageCompare
     }
 
     /**
+     * @return int
+     */
+    public function getChunkSize()
+    {
+        return $this->chunkSize;
+    }
+
+    /**
+     * @param int $chunkSize
+     */
+    public function setChunkSize($chunkSize)
+    {
+        $this->chunkSize = $chunkSize;
+    }
+
+
+
+
+    /**
+     * @return bool
+     */
+    public function isDebugEnabled()
+    {
+        return $this->debugEnabled;
+    }
+
+
+
+
+    /**
+     * @param bool $debugEnabled
+     */
+    public function setDebugEnabled($debugEnabled)
+    {
+        $this->debugEnabled = $debugEnabled;
+    }
+
+    /**
+     * @return AdapterInterface
+     */
+    public function getCacheAdapter()
+    {
+        return $this->cacheAdapter;
+    }
+
+    /**
+     * @param AdapterInterface $cacheAdapter
+     */
+    public function setCacheAdapter($cacheAdapter)
+    {
+        $this->cacheAdapter = $cacheAdapter;
+    }
+
+
+    /**
      * UTILS
      */
 
@@ -476,7 +551,7 @@ class FastImageCompare
         $root = $_SERVER['DOCUMENT_ROOT'];
         echo '<hr>';
         foreach ($input as $img) {
-            $url = str_replace($root, '', $img);
+            $url = '/'.str_replace($root, '', $img);
            // $b = basename($img);
            // $url = '/temporary/_importer_api/'.$b;
             echo '<img style="height:40px;padding:4px;" src="' . $url . '"/>';//<br/>';

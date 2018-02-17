@@ -44,27 +44,21 @@ class ComparatorImageMagick extends ComparableBase
      */
     private $metric;
 
-//    /**
-//     * Equalize ( aka normalize ) images before comparison ,
-//     * @var bool
-//     */
-//    private $equalize = true;
-
-
     /**
      * Creates a ImageMagick comparator instance with default metric METRIC_MAE
      * @param int $metric
-     * @param INormalizer[] $normalizers
+     * @param INormalizable[] $normalizers
      */
     public function __construct($metric = self::METRIC_MAE,$normalizers = null)
     {
+        parent::__construct();
         $this->setMetric($metric);
 
         if (is_null($normalizers)){
-            $this->registerNormalizer(new NormalizerSizeType(8));
+            $this->registerNormalizer(new NormalizerSquaredSize(8));
         } elseif (is_array($normalizers)){
             $this->setNormalizers($normalizers);
-        } elseif ($normalizers instanceof INormalizer){
+        } elseif ($normalizers instanceof INormalizable){
             $this->registerNormalizer($normalizers);
         }
 
@@ -76,9 +70,10 @@ class ComparatorImageMagick extends ComparableBase
      * @param $imageLeftOriginal string
      * @param $imageRightOriginal string
      * @param $enoughDifference float
+     * @param $instance FastImageCompare
      * @return float percentage difference in range 0..1
      */
-    public function calculateDifference($imageLeftNormalized, $imageRightNormalized, $imageLeftOriginal, $imageRightOriginal, $enoughDifference)
+    public function calculateDifference($imageLeftNormalized, $imageRightNormalized, $imageLeftOriginal, $imageRightOriginal, $enoughDifference,FastImageCompare $instance)
     {
         $imageInstanceLeft = new \imagick();
         $imageInstanceRight = new \imagick();
@@ -90,16 +85,17 @@ class ComparatorImageMagick extends ComparableBase
         $imageInstanceLeft->readImage($imageLeftNormalized);
         $imageInstanceRight->readImage($imageRightNormalized);
 
-        $difference = $imageInstanceLeft->compareImages($imageInstanceRight, $this->getMetric());
-//        $difference = $imageInstanceLeft->compareImages($imageInstanceRight, \Imagick::METRIC_NORMALIZEDCROSSCORRELATIONERRORMETRIC);
-        $difference = $difference[1];
+        $difference = $imageInstanceLeft->compareImages($imageInstanceRight, $this->localMetricToImagickMetric($this->getMetric()))[1];
 
         switch ($this->getMetric()) {
-            case \Imagick::METRIC_ABSOLUTEERRORMETRIC:
+//            case self::METRIC_MAE:
+            case self::METRIC_AE:
                 $difference = ($difference > 0) ? $difference / ($imageInstanceLeft->getImageWidth() * $imageInstanceLeft->getImageHeight()) : $difference;
                 break;
+            case self::METRIC_NCC:
+                $difference = 1.0 - $difference;
+                break;
         }
-
         $imageInstanceLeft->clear();
         $imageInstanceRight->clear();
         unset($imageInstanceLeft);
@@ -122,43 +118,53 @@ class ComparatorImageMagick extends ComparableBase
      */
     public function setMetric($metric)
     {
+        $this->metric = $metric;
+//        switch ($metric) {
+//            case self::METRIC_AE:
+//                $this->metric = \Imagick::METRIC_ABSOLUTEERRORMETRIC;
+//                break;
+//            case self::METRIC_MAE:
+//                $this->metric = \Imagick::METRIC_MEANABSOLUTEERROR;
+//                break;
+//            case self::METRIC_MSE:
+//                $this->metric = \Imagick::METRIC_MEANSQUAREERROR;
+//                break;
+//            case self::METRIC_RMSE:
+//                $this->metric = \Imagick::METRIC_ROOTMEANSQUAREDERROR;
+//                break;
+//            case self::METRIC_NCC:
+//                $this->metric = \Imagick::METRIC_NORMALIZEDCROSSCORRELATIONERRORMETRIC;
+//                break;
+//            default:
+//                $this->metric = \Imagick::METRIC_MEANABSOLUTEERROR;
+//        }
+    }
+
+    private function localMetricToImagickMetric($metric){
         switch ($metric) {
             case self::METRIC_AE:
-                $this->metric = \Imagick::METRIC_ABSOLUTEERRORMETRIC;
+                return \Imagick::METRIC_ABSOLUTEERRORMETRIC;
                 break;
             case self::METRIC_MAE:
-                $this->metric = \Imagick::METRIC_MEANABSOLUTEERROR;
+                return \Imagick::METRIC_MEANABSOLUTEERROR;
                 break;
             case self::METRIC_MSE:
-                $this->metric = \Imagick::METRIC_MEANSQUAREERROR;
+                return \Imagick::METRIC_MEANSQUAREERROR;
                 break;
             case self::METRIC_RMSE:
-                $this->metric = \Imagick::METRIC_ROOTMEANSQUAREDERROR;
+                return \Imagick::METRIC_ROOTMEANSQUAREDERROR;
                 break;
             case self::METRIC_NCC:
-                $this->metric = \Imagick::METRIC_NORMALIZEDCROSSCORRELATIONERRORMETRIC;
+                return \Imagick::METRIC_NORMALIZEDCROSSCORRELATIONERRORMETRIC;
                 break;
             default:
-                $this->metric = \Imagick::METRIC_MEANABSOLUTEERROR;
+                return \Imagick::METRIC_MEANABSOLUTEERROR;
         }
     }
 
-//    /**
-//     * @return bool
-//     */
-//    public function isEqualize()
-//    {
-//        return $this->equalize;
-//    }
-//
-//    /**
-//     * @param bool $equalize
-//     */
-//    public function setEqualize($equalize)
-//    {
-//        $this->equalize = $equalize;
-//    }
-
-
+    public function generateCacheKey($imageLeft,$imageRight)
+    {
+        return $this->getMetric();
+    }
 
 }

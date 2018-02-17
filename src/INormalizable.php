@@ -9,24 +9,14 @@
 
 namespace pepeEpe\FastImageCompare;
 
-interface INormalizer {
-
+interface INormalizable  {
 
     /**
      * @param $imagePath
+     * @param $output
      * @param $tempDir
      * @return string path
      */
-    public function normalize($imagePath, $tempDir);
-
-    /**
-     * @param $imagePath
-     * @return string
-     */
-    public function getCacheKey($imagePath);
-
-
-    public function getCachedFile($filePath,$temporaryDirectory);
-
+    public function normalize($imagePath,$output, $tempDir);
 
 }
