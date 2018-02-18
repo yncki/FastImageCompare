@@ -10,12 +10,9 @@
 
 namespace pepeEpe\FastImageCompare;
 
-use Gumlet\ImageResize;
 use FastImageSize\FastImageSize;
-use RecursiveIteratorIterator;
-use RecursiveDirectoryIterator;
-use SplFileInfo;
 use Symfony\Component\Cache\Adapter\AdapterInterface;
+use Psr\Cache\CacheItemPoolInterface;
 
 /**
  * Class FastImageCompare
@@ -35,7 +32,7 @@ class FastImageCompare
     const PREFER_LARGER_DIFFERENCE = 16;
 
     /**
-     * @var AdapterInterface
+     * @var CacheItemPoolInterface
      */
     private $cacheAdapter;
 
@@ -101,7 +98,6 @@ class FastImageCompare
      * @param array $inputImages
      * @param $enoughDifference float
      * @return array
-     * @throws \Exception
      */
     private function compareArray(array $inputImages,$enoughDifference)
     {
@@ -128,7 +124,6 @@ class FastImageCompare
      * @param $inputRight string
      * @param float $enoughDifference
      * @return float
-     * @throws \Exception
      */
     private function internalCompareImage($inputLeft, $inputRight, $enoughDifference)
     {
@@ -138,10 +133,6 @@ class FastImageCompare
         {
 
             $calculatedDifference = $comparatorInstance->difference($inputLeft,$inputRight,$enoughDifference,$this);
-
-            dump($calculatedDifference);
-            dump($inputLeft);
-            dump($inputRight);
 
             /**
              * jesli komparator dziala w trybie dokladnym @see IComparable::STRICT, tzn ze jesli znajdzie roznice to nie trzeba dalej porownywac
@@ -195,7 +186,6 @@ class FastImageCompare
      * @param array $inputImages
      * @param float $enough percentage 0..1
      * @return array
-     * @throws \Exception
      */
     public function findDuplicates(array $inputImages, $enough = 0.05)
     {
@@ -217,7 +207,6 @@ class FastImageCompare
      * @param float $enoughDifference
      * @param int $preferOnDuplicate
      * @return array
-     * @throws \Exception
      */
     public function findUniques(array $images, $enoughDifference = 0.05, $preferOnDuplicate = FastImageCompare::PREFER_LARGER_IMAGE)
     {
@@ -256,7 +245,6 @@ class FastImageCompare
      * @param array $inputImages
      * @param float $enoughDifference
      * @return array
-     * @throws \Exception
      */
     private function extractDuplicatesMap(array $inputImages, $enoughDifference = 0.05)
     {
@@ -390,7 +378,7 @@ class FastImageCompare
      * @param $directory
      * @throws \Exception
      */
-    private function setTemporaryDirectory($directory)
+    public function setTemporaryDirectory($directory)
     {
         if (is_null($directory)) {
             $this->temporaryDirectory = sys_get_temp_dir() . DIRECTORY_SEPARATOR . '_fastImageCompare' . DIRECTORY_SEPARATOR;
@@ -507,7 +495,7 @@ class FastImageCompare
     }
 
     /**
-     * @return AdapterInterface
+     * @return CacheItemPoolInterface
      */
     public function getCacheAdapter()
     {
@@ -515,9 +503,9 @@ class FastImageCompare
     }
 
     /**
-     * @param AdapterInterface $cacheAdapter
+     * @param CacheItemPoolInterface $cacheAdapter
      */
-    public function setCacheAdapter($cacheAdapter)
+    public function setCacheAdapter(CacheItemPoolInterface $cacheAdapter = null)
     {
         $this->cacheAdapter = $cacheAdapter;
     }

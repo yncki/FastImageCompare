@@ -93,13 +93,12 @@ abstract class ComparableBase implements IComparable
         if (!is_null($instance->getCacheAdapter())) {
             $item = $instance->getCacheAdapter()->getItem($cacheKey);
             if ($item->isHit()) {
-                $r = $item->get();
-                return $r;
+                $result = $item->get();
+                return $result;
             } else {
                 $result = $this->calculateDifference($normalizedLeft, $normalizedRight, $inputLeft, $inputRight, $enoughDifference, $instance);
                 $item->set($result);
-                $saved = $instance->getCacheAdapter()->save($item);
-                if (!$saved) throw new \Exception('Cant save cache');
+                $instance->getCacheAdapter()->save($item);
                 return $result;
             }
         } else {

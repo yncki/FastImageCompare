@@ -24,8 +24,6 @@ class NormalizerHistogram extends NormalizableBase {
         $imageInstanceLeft->writeImage($output);
         $imageInstanceLeft->clear();
         return $output;
-
-
     }
 
     /**

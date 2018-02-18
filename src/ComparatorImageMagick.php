@@ -32,7 +32,6 @@ class ComparatorImageMagick extends ComparableBase
      */
     const METRIC_RMSE = -4;
 
-
     /**
      * normalized cross correlation (1 = similar)
      */
@@ -88,7 +87,6 @@ class ComparatorImageMagick extends ComparableBase
         $difference = $imageInstanceLeft->compareImages($imageInstanceRight, $this->localMetricToImagickMetric($this->getMetric()))[1];
 
         switch ($this->getMetric()) {
-//            case self::METRIC_MAE:
             case self::METRIC_AE:
                 $difference = ($difference > 0) ? $difference / ($imageInstanceLeft->getImageWidth() * $imageInstanceLeft->getImageHeight()) : $difference;
                 break;
@@ -119,25 +117,6 @@ class ComparatorImageMagick extends ComparableBase
     public function setMetric($metric)
     {
         $this->metric = $metric;
-//        switch ($metric) {
-//            case self::METRIC_AE:
-//                $this->metric = \Imagick::METRIC_ABSOLUTEERRORMETRIC;
-//                break;
-//            case self::METRIC_MAE:
-//                $this->metric = \Imagick::METRIC_MEANABSOLUTEERROR;
-//                break;
-//            case self::METRIC_MSE:
-//                $this->metric = \Imagick::METRIC_MEANSQUAREERROR;
-//                break;
-//            case self::METRIC_RMSE:
-//                $this->metric = \Imagick::METRIC_ROOTMEANSQUAREDERROR;
-//                break;
-//            case self::METRIC_NCC:
-//                $this->metric = \Imagick::METRIC_NORMALIZEDCROSSCORRELATIONERRORMETRIC;
-//                break;
-//            default:
-//                $this->metric = \Imagick::METRIC_MEANABSOLUTEERROR;
-//        }
     }
 
     private function localMetricToImagickMetric($metric){

@@ -37,12 +37,17 @@ abstract class NormalizableBase implements INormalizable {
      * @return string
      */
     private function buildCachePath($filePath){
-        return $this->getShortClassName().DIRECTORY_SEPARATOR.$this->getCacheKey($filePath);
+        return $this->getShortClassName() . DIRECTORY_SEPARATOR . $this->getCacheKey($filePath);
     }
 
+    /**
+     * @param $filePath
+     * @param $temporaryDirectory
+     * @return string
+     */
     public function getCachedFile($filePath,$temporaryDirectory)
     {
-        $dest =  $temporaryDirectory.$this->buildCachePath($filePath);
+        $dest = $temporaryDirectory . $this->buildCachePath($filePath);
         if (!$this->ensuredCacheDirExists){
             $this->ensuredCacheDirExists  = dirname($dest);
             if (!file_exists($this->ensuredCacheDirExists)){
