@@ -1,9 +1,11 @@
 # Fast Image Compare for PHP [V.I.P]
 PHP library for comparing images.
 
-###What does this library do
-- detect duplicate images in arrays,
-- extract unique images from the array ( remove duplicates )
+### What does this library do
+- compare two images
+- check two images are similar or different
+- find duplicate images in array or in directory,
+- find unique images in array or in directory  
 - compare images ( with different sizes and aspect ratios too),
 - compare image arrays,
 - return percentage difference between images

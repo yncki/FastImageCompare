@@ -20,7 +20,7 @@ use Symfony\Component\Cache\Adapter\AdapterInterface;
 /**
  * Class FastImageCompare
  *
- * By default it calculates difference of images using Absolute Error metric ( AE )
+ * By default it calculates difference of images using Mean Absolute Error metric ( MAE )
  *
  *
  * @package pepeEpe
@@ -156,7 +156,6 @@ class FastImageCompare
              * Jesli przekazujemy dalej , musimy wziac pod uwage wszystkie komparatory i na podstawie wyniku ze wszystkich
              * zadecydowac czy jest rowny czy rozny
              */
-
 
             if ($comparatorInstance->getComparableMode() != IComparable::STRICT)
             {
