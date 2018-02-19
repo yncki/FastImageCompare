@@ -71,21 +71,23 @@ class FastImageCompare
      *
      *
      * @param null $absoluteTemporaryDirectory When null, library will use system temporary directory
-     * @param IComparable[]|IComparable|null $comparators comparator instance(s), when null a default comparator will be registered @see ComparatorImageMagick with metric MEAN ABSOLUTE ERROR
+     * @param IComparable[]|IComparable|null $comparators comparator instance(s), when null - no comparators will be registered, when empty array a default comparator will be registered @see ComparatorImageMagick with metric MEAN ABSOLUTE ERROR
      * @param $cacheAdapter AdapterInterface
-     * @throws \Exception
      */
-    public function __construct($absoluteTemporaryDirectory = null, $comparators = null , $cacheAdapter = null)
+    public function __construct($absoluteTemporaryDirectory = null, $comparators = [], $cacheAdapter = null)
     {
         $this->setTemporaryDirectory($absoluteTemporaryDirectory);
         $this->setCacheAdapter($cacheAdapter);
 
         if (is_null($comparators)) {
-            //register default comparator
-            $this->registerComparator(new ComparatorImageMagick(ComparatorImageMagick::METRIC_MAE));
+
         } elseif (is_array($comparators)) {
             //set array of comparators
-            $this->setComparators($comparators);
+            if (count($comparators) == 0) {
+                $this->registerComparator(new ComparatorImageMagick(ComparatorImageMagick::METRIC_MAE));
+            } else {
+                $this->setComparators($comparators);
+            }
         } elseif ($comparators instanceof IComparable){
             //register
             $this->registerComparator($comparators);
@@ -390,7 +392,9 @@ class FastImageCompare
             // it seems that vagrant has problems with setting permissions when creating directory so lets chmod it directly
             @chmod($this->getTemporaryDirectory(), $this->getTemporaryDirectoryPermissions());
         }
-        if (!is_writable($this->getTemporaryDirectory())) throw new \Exception('Temporary directory ' . $this->getTemporaryDirectory() . ' is not writable');
+        if (!is_writable($this->getTemporaryDirectory())) {
+            throw new \Exception('Temporary directory ' . $this->getTemporaryDirectory() . ' is not writable');
+        }
     }
 
 

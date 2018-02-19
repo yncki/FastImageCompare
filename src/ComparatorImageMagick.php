@@ -48,7 +48,7 @@ class ComparatorImageMagick extends ComparableBase
      * @param int $metric
      * @param INormalizable[] $normalizers
      */
-    public function __construct($metric = self::METRIC_MAE,$normalizers = null)
+    public function __construct($metric = self::METRIC_MAE, $normalizers = null)
     {
         parent::__construct();
         $this->setMetric($metric);
@@ -143,7 +143,7 @@ class ComparatorImageMagick extends ComparableBase
 
     public function generateCacheKey($imageLeft,$imageRight)
     {
-        return $this->getMetric();
+        return implode('-', array($this->getMetric()));
     }
 
 }

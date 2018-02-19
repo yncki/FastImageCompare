@@ -16,7 +16,7 @@ class NormalizerHistogram extends NormalizableBase {
      * @param $tempDir
      * @return string path
      */
-    public function normalize($imagePath,$output, $tempDir)
+    public function normalize($imagePath, $output, $tempDir)
     {
         $imageInstanceLeft = new \imagick();
         $imageInstanceLeft->readImage($imagePath);
