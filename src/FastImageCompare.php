@@ -119,6 +119,14 @@ class FastImageCompare
     }
 
 
+    private function segmentarize(array $inputImages)
+    {
+        //scan files and attach group to each image
+        //groups = color|black_white|lower_than_16_colors|
+        //
+    }
+
+
     /**
      * Internal method to compare images by registered comparators
      *

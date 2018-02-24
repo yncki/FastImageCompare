@@ -44,14 +44,21 @@ class ComparatorImageMagick extends ComparableBase
     private $metric;
 
     /**
+     * @var bool
+     */
+    private $ignoreAlpha = false;
+
+    /**
      * Creates a ImageMagick comparator instance with default metric METRIC_MAE
      * @param int $metric
      * @param INormalizable[] $normalizers
+     * @param $ignoreAlpha bool
      */
-    public function __construct($metric = self::METRIC_MAE, $normalizers = null)
+    public function __construct($metric = self::METRIC_MAE, $normalizers = null,$ignoreAlpha = false)
     {
         parent::__construct();
         $this->setMetric($metric);
+        $this->setIgnoreAlpha($ignoreAlpha);
 
         if (is_null($normalizers)){
             $this->registerNormalizer(new NormalizerSquaredSize(8));
@@ -83,6 +90,16 @@ class ComparatorImageMagick extends ComparableBase
 
         $imageInstanceLeft->readImage($imageLeftNormalized);
         $imageInstanceRight->readImage($imageRightNormalized);
+
+
+        if ($this->isIgnoreAlpha()){
+            $imageInstanceLeft->setImageBackgroundColor('#FFFFFF');
+            $imageInstanceLeft = $imageInstanceLeft->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);
+
+            $imageInstanceRight->setImageBackgroundColor('#FFFFFF');
+            $imageInstanceRight = $imageInstanceRight->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);
+        }
+
 
         $difference = $imageInstanceLeft->compareImages($imageInstanceRight, $this->localMetricToImagickMetric($this->getMetric()))[1];
 
@@ -141,9 +158,25 @@ class ComparatorImageMagick extends ComparableBase
         }
     }
 
+    /**
+     * @return bool
+     */
+    public function isIgnoreAlpha()
+    {
+        return $this->ignoreAlpha;
+    }
+
+    /**
+     * @param bool $ignoreAlpha
+     */
+    public function setIgnoreAlpha($ignoreAlpha)
+    {
+        $this->ignoreAlpha = $ignoreAlpha;
+    }
+
     public function generateCacheKey($imageLeft,$imageRight)
     {
-        return implode('-', array($this->getMetric()));
+        return implode('-', array($this->getMetric(),$this->isIgnoreAlpha()?'ia':'iaOff'));
     }
 
 }
