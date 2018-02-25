@@ -11,18 +11,19 @@ namespace pepeEpe\FastImageCompare;
 
 class NormalizerHistogram extends NormalizableBase {
     /**
-     * @param $imagePath
+     * @param $inputImagePath
      * @param $output
      * @param $tempDir
      * @return string path
      */
-    public function normalize($imagePath, $output, $tempDir)
+    public function normalize($inputImagePath, $output, $tempDir)
     {
         $imageInstanceLeft = new \imagick();
-        $imageInstanceLeft->readImage($imagePath);
+        $imageInstanceLeft->readImage($inputImagePath);
         $imageInstanceLeft->normalizeImage();
         $imageInstanceLeft->writeImage($output);
         $imageInstanceLeft->clear();
+        unset($imageInstanceLeft);
         return $output;
     }
 

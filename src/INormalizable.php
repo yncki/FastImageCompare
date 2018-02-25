@@ -12,11 +12,11 @@ namespace pepeEpe\FastImageCompare;
 interface INormalizable  {
 
     /**
-     * @param $imagePath
+     * @param $inputImagePath
      * @param $output
      * @param $tempDir
      * @return string path
      */
-    public function normalize($imagePath,$output, $tempDir);
+    public function normalize($inputImagePath, $output, $tempDir);
 
 }

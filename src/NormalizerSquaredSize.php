@@ -11,6 +11,7 @@ namespace pepeEpe\FastImageCompare;
 
 
 use Gumlet\ImageResize;
+use Gumlet\ImageResizeException;
 
 class NormalizerSquaredSize extends NormalizableBase
 {
@@ -22,17 +23,23 @@ class NormalizerSquaredSize extends NormalizableBase
         $this->setSampleSize(max(2,$sampleSize));
     }
 
-    public function normalize($imagePath,$output, $tempDir)
+    public function normalize($inputImagePath, $output, $tempDir)
     {
-        $imageResize = new ImageResize($imagePath);
-        $imageResize->quality_jpg = 100;
-        $imageResize->quality_png = 9;
-        $imageResize->quality_webp = 100;
-        $imageResize->quality_truecolor = true;
-        $imageResize->resize($this->getSampleSize(), $this->getSampleSize(), true);
-        $imageResize->save($output,IMAGETYPE_PNG);
-        unset($imageResize);
-        return $output;
+        try {
+            $imageResize = new ImageResize($inputImagePath);
+            $imageResize->quality_jpg = 100;
+            $imageResize->quality_png = 9;
+            $imageResize->quality_webp = 100;
+            $imageResize->quality_truecolor = true;
+            $imageResize->resize($this->getSampleSize(), $this->getSampleSize(), true);
+            $imageResize->save($output, IMAGETYPE_PNG);
+            unset($imageResize);
+            return $output;
+        } catch (\Exception $e) {
+            copy($inputImagePath, $output);
+            return $output;
+        }
+
     }
 
     public function getCacheKey($imagePath)

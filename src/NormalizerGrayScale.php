@@ -11,21 +11,21 @@ namespace pepeEpe\FastImageCompare;
 
 class NormalizerGrayScale extends NormalizableBase {
     /**
-     * @param $imagePath
-     * @param $result
+     * @param $inputImagePath
+     * @param $outputImagePath
      * @param $tempDir
      * @return string path
      */
-    public function normalize($imagePath,$result, $tempDir)
+    public function normalize($inputImagePath, $outputImagePath, $tempDir)
     {
         $imageInstanceLeft = new \imagick();
-        $imageInstanceLeft->readImage($imagePath);
+        $imageInstanceLeft->readImage($inputImagePath);
         $imageInstanceLeft->transformimagecolorspace(\Imagick::COLORSPACE_GRAY);
         $imageInstanceLeft->setColorspace(\Imagick::COLORSPACE_GRAY);
-        $imageInstanceLeft->writeImage($result);
+        $imageInstanceLeft->writeImage($outputImagePath);
         $imageInstanceLeft->clear();
         unset($imageInstanceLeft);
-        return $result;
+        return $outputImagePath;
     }
 
     /**

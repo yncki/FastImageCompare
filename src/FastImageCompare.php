@@ -62,6 +62,11 @@ class FastImageCompare
     private $registeredComparators = [];
 
     /**
+     * @var IClassificable[]
+     */
+    private $registeredSegmentalizers = [];
+
+    /**
      * @var int
      */
     private $chunkSize = 8;
@@ -121,9 +126,18 @@ class FastImageCompare
 
     private function segmentarize(array $inputImages)
     {
+        $output = [];
+        foreach ($inputImages as $inputImage) {
+            if (!isset($output[$inputImage])) $output[$inputImage] = [];
+            foreach ($this->registeredSegmentalizers as $segmentalizer) {
+                $output[$inputImage] = array_merge($output[$inputImage], $segmentalizer->classify($inputImage));
+            }
+        }
         //scan files and attach group to each image
         //groups = color|black_white|lower_than_16_colors|
         //
+        dump($output);
+        return array_unique($output);
     }
 
 
@@ -199,9 +213,12 @@ class FastImageCompare
      */
     public function findDuplicates(array $inputImages, $enough = 0.05)
     {
+
         $inputImages = array_unique($inputImages);
+        $this->segmentarize($inputImages);
         $output = [];
         $compared = $this->compareArray($inputImages,$enough);
+
         foreach ($compared as $data) {
             if ($data[2] <= $enough) {
                 $output[] = $data[0];
@@ -260,6 +277,7 @@ class FastImageCompare
     {
         //TODO implement better chunking , recursive
         $inputImages = array_unique($inputImages);
+        $this->segmentarize($inputImages);
         $output = [];
         $chunks = array_chunk($inputImages,$this->getChunkSize(),true);
         $chunkedArray = [];
@@ -397,7 +415,7 @@ class FastImageCompare
         }
         if (!file_exists($this->getTemporaryDirectory())) {
             mkdir($this->getTemporaryDirectory(), $this->getTemporaryDirectoryPermissions(), true);
-            // it seems that vagrant has problems with setting permissions when creating directory so lets chmod it directly
+            // it seems that vagrant has problems with setting permissions when creating directory so lets chmod it again
             @chmod($this->getTemporaryDirectory(), $this->getTemporaryDirectoryPermissions());
         }
         if (!is_writable($this->getTemporaryDirectory())) {
@@ -430,6 +448,11 @@ class FastImageCompare
     public function setTemporaryDirectoryPermissions($temporaryDirectoryPermissions)
     {
         $this->temporaryDirectoryPermissions = $temporaryDirectoryPermissions;
+    }
+
+    public function registerSegmentalizer(IClassificable $segmentalizer)
+    {
+        $this->registeredSegmentalizers[] = $segmentalizer;
     }
 
 
