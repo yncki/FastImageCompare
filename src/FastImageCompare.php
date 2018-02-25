@@ -64,7 +64,7 @@ class FastImageCompare
     /**
      * @var IClassificable[]
      */
-    private $registeredSegmentalizers = [];
+    private $registeredClassifiers = [];
 
     /**
      * @var int
@@ -124,13 +124,13 @@ class FastImageCompare
     }
 
 
-    private function segmentarize(array $inputImages)
+    private function classify(array $inputImages)
     {
         $output = [];
         foreach ($inputImages as $inputImage) {
             if (!isset($output[$inputImage])) $output[$inputImage] = [];
-            foreach ($this->registeredSegmentalizers as $segmentalizer) {
-                $output[$inputImage] = array_merge($output[$inputImage], $segmentalizer->classify($inputImage));
+            foreach ($this->registeredClassifiers as $classifier) {
+                $output[$inputImage] = array_merge($output[$inputImage], $classifier->classify($inputImage));
             }
         }
         //scan files and attach group to each image
@@ -215,7 +215,7 @@ class FastImageCompare
     {
 
         $inputImages = array_unique($inputImages);
-        $this->segmentarize($inputImages);
+        $this->classify($inputImages);
         $output = [];
         $compared = $this->compareArray($inputImages,$enough);
 
@@ -277,7 +277,7 @@ class FastImageCompare
     {
         //TODO implement better chunking , recursive
         $inputImages = array_unique($inputImages);
-        $this->segmentarize($inputImages);
+        $this->classify($inputImages);
         $output = [];
         $chunks = array_chunk($inputImages,$this->getChunkSize(),true);
         $chunkedArray = [];
@@ -450,9 +450,28 @@ class FastImageCompare
         $this->temporaryDirectoryPermissions = $temporaryDirectoryPermissions;
     }
 
-    public function registerSegmentalizer(IClassificable $segmentalizer)
+    /**
+     * @param IClassificable $classifier
+     */
+    public function registerClassifier(IClassificable $classifier)
     {
-        $this->registeredSegmentalizers[] = $segmentalizer;
+        $this->registeredClassifiers[] = $classifier;
+    }
+
+    /**
+     * @param IClassificable[] $classifiers
+     */
+    public function setClassifiers(array $classifiers)
+    {
+        $this->registeredClassifiers = $classifiers;
+    }
+
+    /**
+     * @return IClassificable[]
+     */
+    public function getClassifiers()
+    {
+        return $this->registeredClassifiers;
     }
 
 
