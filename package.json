@@ -1,6 +1,6 @@
 {
-  "name": "pepeEpe/php-fast-image-compare",
-  "version": "0.0.1",
+  "name": "yncki/php-fast-image-compare",
+  "version": "1.0.0",
   "dependencies": {
   }
 }
