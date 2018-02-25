@@ -136,7 +136,7 @@ class FastImageCompare
         //scan files and attach group to each image
         //groups = color|black_white|lower_than_16_colors|
         //
-        dump($output);
+//        dump($output);
         return array_unique($output);
     }
 
