@@ -8,7 +8,6 @@
     "unique",
     "php"
   ],
-  "minimum-stability": "stable",
   "license": "MIT",
   "authors": [
     {
