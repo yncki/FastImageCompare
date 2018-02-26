@@ -30,6 +30,8 @@ class FastImageCompare
     const PREFER_SMALLER_IMAGE = 4;
     const PREFER_LOWER_DIFFERENCE = 8;
     const PREFER_LARGER_DIFFERENCE = 16;
+    const PREFER_COLOR = 32;
+    const PREFER_GRAYSCALE = 64;
 
     /**
      * @var CacheItemPoolInterface
@@ -133,10 +135,6 @@ class FastImageCompare
                 $output[$inputImage] = array_merge($output[$inputImage], $classifier->classify($inputImage));
             }
         }
-        //scan files and attach group to each image
-        //groups = color|black_white|lower_than_16_colors|
-        //
-//        dump($output);
         return array_unique($output);
     }
 
@@ -352,6 +350,12 @@ class FastImageCompare
                 asort($sorted);
                 reset($sorted);
                 return key($sorted);
+                break;
+
+            case self::PREFER_COLOR:
+            case self::PREFER_GRAYSCALE:
+
+
                 break;
 
             case self::PREFER_LARGER_IMAGE:
