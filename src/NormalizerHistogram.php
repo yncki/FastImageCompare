@@ -20,7 +20,7 @@ class NormalizerHistogram extends NormalizableBase {
     {
         $imageInstanceLeft = new \imagick();
         $imageInstanceLeft->readImage($inputImagePath);
-        $imageInstanceLeft->normalizeImage();
+        $imageInstanceLeft->equalizeImage();
         $imageInstanceLeft->writeImage($output);
         $imageInstanceLeft->clear();
         unset($imageInstanceLeft);
