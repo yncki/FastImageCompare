@@ -384,12 +384,13 @@ class FastImageCompare
     /**
      * Clears files in cache folder older than $lifeTimeSeconds,
      * @param int $lifeTimeSeconds , set null to remove all files
+     * @param bool $clearCacheAdapter
      */
-    public function clearCache($lifeTimeSeconds = null)
+    public function clearCache($lifeTimeSeconds = null, $clearCacheAdapter = true)
     {
         $oldCache = Utils::getFilesOlderBy($this->getTemporaryDirectory(),$lifeTimeSeconds);
         Utils::removeFiles($oldCache);
-        if (!is_null($this->getCacheAdapter())) $this->getCacheAdapter()->clear();
+        if (!is_null($this->getCacheAdapter()) && $clearCacheAdapter) $this->getCacheAdapter()->clear();
     }
 
     /**
