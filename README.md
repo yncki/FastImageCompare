@@ -1,7 +1,7 @@
-# Fast Image Compare for PHP [V.I.P]
-PHP library for comparing images.
+# Fast Image Compare for PHP
+PHP library for comparing images
 
-### What does this library do
+### What this library does
 - compare two images
 - check two images are similar or different
 - find duplicate images in array or in directory,
@@ -9,23 +9,11 @@ PHP library for comparing images.
 - compare images ( with different sizes and aspect ratios too),
 - compare image arrays,
 - return percentage difference between images
-- supports jpg, png, bmp
+- supports jpg, png, bmp, webp
 
 ### Requirements
 In order to load and compare images, the library relies on the ImageMagick extension.
 
-### Setup
-This package is available through Packagist.
+### Installation and Documentation 
 
-In your composer.json file add:
-'''javascript
-{
-    "require": {
-        "pepeEpe/php-fast-image-compare": "1.0.*"
-    }
-}
-'''
-
-### Usage
-
-coming soon
+https://php-image-comparer.axl.pl
