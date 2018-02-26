@@ -354,14 +354,25 @@ class FastImageCompare
 
             case self::PREFER_COLOR:
             case self::PREFER_GRAYSCALE:
+                $values = array_keys($mapEntry);
+                array_push($values, $duplicateItem);
+                $values = array_unique($values);
 
+                $tmpClassifier = new ClassifierColor();
 
+                foreach ($values as $imagePath) {
+                    $classifierTags = $tmpClassifier->classify($imagePath, $this);
+                    if ($preferOnDuplicate == self::PREFER_COLOR && in_array(ClassifierColor::COLORS_COLOR, $classifierTags)) return $imagePath;
+                    if ($preferOnDuplicate == self::PREFER_GRAYSCALE && in_array(ClassifierColor::COLORS_GRAYSCALE, $classifierTags)) return $imagePath;
+                }
+                return $duplicateItem;
                 break;
 
             case self::PREFER_LARGER_IMAGE:
             case self::PREFER_SMALLER_IMAGE:
                 $values = array_keys($mapEntry);
                 array_push($values, $duplicateItem);
+                $values = array_unique($values);
                 $output = array();
                 foreach ($values as $imagePath) {
                     $size = $this->getImageSize($imagePath);
