@@ -132,7 +132,7 @@ class FastImageCompare
         foreach ($inputImages as $inputImage) {
             if (!isset($output[$inputImage])) $output[$inputImage] = [];
             foreach ($this->registeredClassifiers as $classifier) {
-                $output[$inputImage] = array_merge($output[$inputImage], $classifier->classify($inputImage));
+                $output[$inputImage] = array_merge($output[$inputImage], $classifier->classify($inputImage, $this));
             }
         }
         return array_unique($output);

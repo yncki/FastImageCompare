@@ -14,11 +14,11 @@ class ClassifierColor extends ClassificableBase
     const COLORS_GRAYSCALE = 'colors:grayscale';
     const COLORS_COLOR = 'colors:color';
 
-    const C_COUNT_BELOW_16 = 'colors:<=16';
-    const C_COUNT_BELOW_64 = 'colors:<=64';
-    const C_COUNT_BELOW_128 = 'colors:<=128';
-    const C_COUNT_BELOW_256 = 'colors:<=256';
-    const C_COUNT_ABOVE_256 = 'colors:>256';
+    const C_COUNT_BELOW_16 = 'colorCount:<=16';
+    const C_COUNT_BELOW_64 = 'colorCount:<=64';
+    const C_COUNT_BELOW_128 = 'colorCount:<=128';
+    const C_COUNT_BELOW_256 = 'colorCount:<=256';
+    const C_COUNT_ABOVE_256 = 'colorCount:>256';
 
     /**
      * @param $inputFile
