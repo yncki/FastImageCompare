@@ -2,7 +2,7 @@
 
 namespace pepeEpe\FastImageCompare;
 
-class ClassifierColor implements IClassificable
+class ClassifierColor extends ClassificableBase
 {
 
     const MAX_COLORS_TO_SCAN = 256;
@@ -11,12 +11,21 @@ class ClassifierColor implements IClassificable
      */
     private $precision = 10;
 
+    const COLORS_GRAYSCALE = 'colors:grayscale';
+    const COLORS_COLOR = 'colors:color';
+
+    const C_COUNT_BELOW_16 = 'colors:<=16';
+    const C_COUNT_BELOW_64 = 'colors:<=64';
+    const C_COUNT_BELOW_128 = 'colors:<=128';
+    const C_COUNT_BELOW_256 = 'colors:<=256';
+    const C_COUNT_ABOVE_256 = 'colors:>256';
 
     /**
      * @param $inputFile
-     * @return array|string[]
+     * @param $instance FastImageCompare
+     * @return string[]
      */
-    public function classify($inputFile)
+    protected function internalClassify($inputFile, FastImageCompare $instance)
     {
         //assume it is grayscale
         $isGrayScale = true;
@@ -40,18 +49,43 @@ class ClassifierColor implements IClassificable
             $ff->clear();
             unset($ff);
             if ($uniqueColors <= 16)
-                return ['colors:<=16', $isGrayScale ? 'colors:grayscale' : 'colors:color'];
+                return [
+                    self::C_COUNT_BELOW_16,
+                    $isGrayScale ? self::COLORS_GRAYSCALE : self::COLORS_COLOR
+                ];
             if ($uniqueColors <= 64)
-                return ['colors:<=64', $isGrayScale ? 'colors:grayscale' : 'colors:color'];
+                return [
+                    self::C_COUNT_BELOW_64,
+                    $isGrayScale ? self::COLORS_GRAYSCALE : self::COLORS_COLOR
+                ];
             if ($uniqueColors <= 128)
-                return ['colors:<=128', $isGrayScale ? 'colors:grayscale' : 'colors:color'];
+                return [
+                    self::C_COUNT_BELOW_128,
+                    $isGrayScale ? self::COLORS_GRAYSCALE : self::COLORS_COLOR
+                ];
             if ($uniqueColors <= 256)
-                return ['colors:<=256', $isGrayScale ? 'colors:grayscale' : 'colors:color'];
-            return ['colors:>256', $isGrayScale ? 'colors:grayscale' : 'colors:color'];
+                return [
+                    self::C_COUNT_BELOW_256,
+                    $isGrayScale ? self::COLORS_GRAYSCALE : self::COLORS_COLOR
+                ];
+            return [
+                self::C_COUNT_ABOVE_256,
+                $isGrayScale ? self::COLORS_GRAYSCALE : self::COLORS_COLOR
+            ];
         } catch (\Exception $e) {
 
         }
         return [];
     }
+
+    /**
+     * @param $imagePath
+     * @return string
+     */
+    public function generateCacheKey($imagePath)
+    {
+        return implode('-', array(self::MAX_COLORS_TO_SCAN, $this->precision));
+    }
+
 
 }

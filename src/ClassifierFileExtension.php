@@ -2,16 +2,27 @@
 
 namespace pepeEpe\FastImageCompare;
 
-class ClassifierFileExtension implements IClassificable
+class ClassifierFileExtension extends ClassificableBase
 {
     /**
      * @param $inputFile
-     * @return string[] group ids
+     * @param $instance FastImageCompare
+     * @return string[]
      */
-    public function classify($inputFile)
+    protected function internalClassify($inputFile, FastImageCompare $instance)
     {
         $ext = pathinfo($inputFile, PATHINFO_EXTENSION);
         return ['extension:' . $ext];
     }
+
+    /**
+     * @param $imagePath
+     * @return string
+     */
+    public function generateCacheKey($imagePath)
+    {
+        return '';
+    }
+
 
 }
