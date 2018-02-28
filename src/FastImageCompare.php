@@ -74,6 +74,11 @@ class FastImageCompare
     private $chunkSize = 8;
 
     /**
+     * @var array
+     */
+    private $classifierData = [];
+
+    /**
      * FastImageCompare constructor.
      *
      *
@@ -135,7 +140,8 @@ class FastImageCompare
                 $output[$inputImage] = array_merge($output[$inputImage], $classifier->classify($inputImage, $this));
             }
         }
-        return array_unique($output);
+        $this->classifierData = $output;
+        //return array_unique($output);
     }
 
 
