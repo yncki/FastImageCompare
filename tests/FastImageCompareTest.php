@@ -7,8 +7,9 @@
  */
 
 use pepeEpe\FastImageCompare\FastImageCompare;
+use PHPUnit\Framework\TestCase;
 
-class FastImageCompareTest extends PHPUnit_Framework_TestCase
+class FastImageCompareTest extends TestCase
 {
 
     public function testGetImageSize()
